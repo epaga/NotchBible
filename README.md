@@ -1,8 +1,8 @@
 # NotchBible
 
-A free macOS menu bar app for looking up and searching Bible verses from your notch.
+A free macOS menu bar app for instant Bible verse lookup and search from your notch.
 Click the notch, type a reference or a few words, and read or copy the results.
-The complete NET Bible is included, so everything works offline.
+The complete [NET Bible](https://netbible.org/) is included, so everything works offline.
 
 ![NotchBible looking up passages and searching Bible verses](docs/preview.gif)
 
