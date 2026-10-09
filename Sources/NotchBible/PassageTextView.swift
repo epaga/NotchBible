@@ -105,7 +105,7 @@ struct PassageTextView: NSViewRepresentable {
                     .foregroundColor: muted.withAlphaComponent(0.8), .paragraphStyle: style
                 ])
                 if showsReferences {
-                    let chapterReference = "\(verse.book.name) \(verse.address.chapter)"
+                    let chapterReference = "\(bible.books[verse.address.book].name) \(verse.address.chapter)"
                     var chapterQuery = chapterReference
                     // A lone number means a verse in single-chapter books.
                     if verse.book.isSingleChapter,

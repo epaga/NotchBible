@@ -39,6 +39,7 @@ public final class BibleStore: Identifiable, Sendable {
     public static let copyright = "Scripture quoted by permission. Quotations designated (NET) are from the NET Bible® copyright ©1996, 2019 by Biblical Studies Press, L.L.C. https://netbible.com. All rights reserved."
     public let verses: [BibleVerse]
     public let translation: String
+    public let books: [BibleBook]
     public var id: String { translation }
     public var attribution: String? { translation.uppercased() == "NET" ? Self.copyright : nil }
     public let bookCount: Int
@@ -62,7 +63,9 @@ public final class BibleStore: Identifiable, Sendable {
     }
 
     public init(text: String, translation: String = "NET", requiresCompleteBible: Bool = true) throws {
-        let byCode = Dictionary(uniqueKeysWithValues: BibleBook.all.map { ($0.code, $0.id) })
+        let books = text.range(of: #"\bGott\b"#, options: [.regularExpression, .caseInsensitive]) != nil
+            ? BibleBook.german : BibleBook.all
+        let byCode = Dictionary(uniqueKeysWithValues: books.map { ($0.code, $0.id) })
         var verses: [BibleVerse] = []
         var addresses: [VerseAddress: Int] = [:]
         var chapters = Array(repeating: [Range<Int>?](), count: 66)
@@ -88,7 +91,7 @@ public final class BibleStore: Identifiable, Sendable {
             }
             if chapter > chapters[book].count {
                 guard !requiresCompleteBible || chapter == chapters[book].count + 1 else {
-                    throw BibleDataError.invalidData("missing chapter in \(BibleBook.all[book].name)")
+                    throw BibleDataError.invalidData("missing chapter in \(books[book].name)")
                 }
                 chapters[book].append(contentsOf: repeatElement(nil, count: chapter - chapters[book].count - 1))
                 chapters[book].append(verses.count..<(verses.count + 1))
@@ -107,12 +110,13 @@ public final class BibleStore: Identifiable, Sendable {
             throw BibleDataError.invalidData("expected 66 books, 1,189 chapters, and 31,102 verses")
         }
         self.translation = translation
+        self.books = books
         self.verses = verses
         self.addresses = addresses
         self.chapters = chapters
         self.bookCount = chapters.filter { !$0.isEmpty }.count
         self.chapterCount = chapters.reduce(0) { $0 + $1.compactMap { $0 }.count }
-        self.searchIndex = VerseSearchIndex(verses: verses)
+        self.searchIndex = VerseSearchIndex(verses: verses, books: books)
     }
 
     public func search(_ input: String) -> ReferenceLookup { searchIndex.lookup(input, verses: verses) }

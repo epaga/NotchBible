@@ -23,14 +23,17 @@ public struct ReferenceLookup: Sendable {
 /// normalized before parsing. No debounce and no network are needed.
 public final class ReferenceParser: Sendable {
     public let bible: BibleStore
-    private let books = BookIndex()
-    public init(bible: BibleStore) { self.bible = bible }
+    private let books: BookIndex
+    public init(bible: BibleStore) {
+        self.bible = bible
+        self.books = BookIndex(books: bible.books)
+    }
 
     func recognizesReference(_ input: String) -> Bool {
         // Quotes and wildcards explicitly select search, even for book names.
         guard input.count <= 2_048, !input.contains(where: { "\"“”*".contains($0) }) else { return false }
         let normalized = Self.normalize(input)
-        if ["1", "2", "3"].contains(normalized) { return true }
+        if ["1", "2", "3", "4", "5"].contains(normalized) { return !books.resolve(normalized).books.isEmpty }
         guard let match = Self.bookPrefix.firstMatch(in: normalized, range: NSRange(normalized.startIndex..., in: normalized)),
               let nameRange = Range(match.range(at: 1), in: normalized) else { return false }
         let resolution = books.resolve(String(normalized[nameRange]))
@@ -84,7 +87,7 @@ public final class ReferenceParser: Sendable {
                 if resolution.corrected { result.hint = "Showing \(resolution.books[0].name)." }
             } else if currentBook == nil {
                 // An ordinal alone is a useful prefix while entering 1 John.
-                if ["1", "2", "3"].contains(rest) {
+                if ["1", "2", "3", "4", "5"].contains(rest), !books.resolve(rest).books.isEmpty {
                     result.suggestions = books.resolve(rest).books.map {
                         ReferenceSuggestion(book: $0, query: "\($0.name) 1:1")
                     }
@@ -223,12 +226,12 @@ public final class ReferenceParser: Sendable {
         return BiblePassage(range: first..<(last + 1), reference: reference)
     }
 
-    private static let bookPrefix = try! NSRegularExpression(pattern: #"^\s*((?:[1-3]\s*)?[a-z]+(?:[.\s]+[a-z]+)*)[.\s]*"#)
+    private static let bookPrefix = try! NSRegularExpression(pattern: #"^\s*((?:[1-5]\s*)?[a-z]+(?:[.\s]+[a-z]+)*)[.\s]*"#)
     private static let replacements: [(NSRegularExpression, String)] = {
         let patterns: [(String, String)] = [
             (#"(?i)\b(?:net\s*bible|net)\s*$"#, ""),
             (#"(?i)\b(?:see|cf|book\s+of)\.?\s+"#, ""),
-            (#"\b([1-3])\s*\.\s*(?=[a-z])"#, "$1"),
+            (#"\b([1-5])\s*\.\s*(?=[a-z])"#, "$1"),
             (#"\biii(?=(?:john|joh|jhn|jn)(?:[.\s\d]|$))"#, "3"),
             (#"\bii(?=(?:samuel|sam|kings|kgs|chronicles|chron|corinthians|cor|thessalonians|thess|timothy|tim|peter|pet|john|joh|jhn|jn)(?:[.\s\d]|$))"#, "2"),
             (#"\bi(?=(?:samuel|sam|kings|kgs|chronicles|chron|corinthians|cor|thessalonians|thess|timothy|tim|peter|pet|john|joh|jhn|jn)(?:[.\s\d]|$))"#, "1"),
@@ -241,8 +244,8 @@ public final class ReferenceParser: Sendable {
             (#"(?i)\s+and\s+|[&|\n\r]"#, ";"),
             // Numeric additions stay in the current verse/chapter list. A
             // new book starts a separate reference, including numbered books.
-            (#"\+\s*(?=(?:[1-3]\s*)?[a-z])"#, ";"),
-            (#"([a-z][0-9\s:.,/+\-]*\d)[\s,]+(?=(?:[1-3]\s*)?[a-z])"#, "$1;")
+            (#"\+\s*(?=(?:[1-5]\s*)?[a-z])"#, ";"),
+            (#"([a-z][0-9\s:.,/+\-]*\d)[\s,]+(?=(?:[1-5]\s*)?[a-z])"#, "$1;")
         ]
         return patterns.map { (try! NSRegularExpression(pattern: $0.0), $0.1) }
     }()

@@ -120,6 +120,11 @@ your current reference or search, and the app remembers your selection.
 Each edition uses its own verse numbering. Copied passages identify the selected
 translation; NET copies also include its copyright acknowledgment.
 
+Translations containing the word **Gott** automatically use German book names
+and abbreviations: `1Mo`, `1. Mose`, and `1.Mo` all select Genesis, displayed as
+**1. Mose**. German names also work in search filters such as `book:1Mo Gott`;
+English book names remain accepted.
+
 To update or remove a translation, replace or remove its file and restart the app.
 Files in this folder stay in place when you update NotchBible. Keep your own backups.
 Invalid files or duplicate translation names are skipped with a warning; a user

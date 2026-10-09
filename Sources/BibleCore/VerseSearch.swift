@@ -48,7 +48,7 @@ private struct SearchQuery {
             !excludedBooks.isEmpty || !excludedTestaments.isEmpty
     }
 
-    init(_ input: String) {
+    init(_ input: String, bookIndex: BookIndex) {
         guard input.count <= 2_048 else {
             error = "That search is too long. Try fewer words or filters."
             return
@@ -95,7 +95,7 @@ private struct SearchQuery {
             }
             switch tag {
             case "book":
-                let resolution = Self.bookIndex.resolve(value).books
+                let resolution = bookIndex.resolve(value).books
                 guard resolution.count == 1 else {
                     error = resolution.isEmpty ? "No book matches “\(value)”. Try book:gen or book:ps." :
                         "“\(value)” matches several books. Use \(resolution.map { "book:\($0.code.lowercased())" }.joined(separator: " or "))."
@@ -125,14 +125,14 @@ private struct SearchQuery {
             }
         }
     }
-
-    private static let bookIndex = BookIndex()
 }
 
 /// An immutable inverted word index with compact token positions. AND/NOT
 /// queries merge sorted verse postings; phrases inspect only their candidates.
 /// Wildcards expand the vocabulary, not the complete verse text.
 struct VerseSearchIndex: Sendable {
+    private let books: [BibleBook]
+    private let bookIndex: BookIndex
     private let wordIDs: [String: UInt32]
     private let postings: [[Int]]
     private let vocabulary: [String]
@@ -142,12 +142,14 @@ struct VerseSearchIndex: Sendable {
     private let testamentPostings: [[Int]]
     private let allVerses: [Int]
 
-    init(verses: [BibleVerse]) {
+    init(verses: [BibleVerse], books: [BibleBook]) {
+        self.books = books
+        self.bookIndex = BookIndex(books: books)
         var wordIDs: [String: UInt32] = [:]
         var postings: [[Int]] = []
         var tokens: [UInt32] = []
         var tokenRanges: [Range<Int>] = []
-        var bookPostings = Array(repeating: [Int](), count: BibleBook.all.count)
+        var bookPostings = Array(repeating: [Int](), count: books.count)
         var testamentPostings = Array(repeating: [Int](), count: 2)
         var allVerses: [Int] = []
         tokens.reserveCapacity(verses.count * 25)
@@ -183,7 +185,7 @@ struct VerseSearchIndex: Sendable {
     }
 
     func lookup(_ input: String, verses: [BibleVerse]) -> ReferenceLookup {
-        let query = SearchQuery(input)
+        let query = SearchQuery(input, bookIndex: bookIndex)
         var result = ReferenceLookup()
         result.isSearch = true
         result.error = query.error
@@ -213,7 +215,7 @@ struct VerseSearchIndex: Sendable {
         result.passages = matches.map { offset in
             let verse = verses[offset]
             return BiblePassage(range: offset..<(offset + 1),
-                                reference: "\(verse.book.name) \(verse.address.chapter):\(verse.address.verse)")
+                                reference: "\(books[verse.address.book].name) \(verse.address.chapter):\(verse.address.verse)")
         }
         if matches.isEmpty && result.hint == nil { result.hint = "No verses match this search in the selected translation." }
         return result

@@ -4,6 +4,35 @@ import BibleCore
 @testable import NotchBible
 
 final class TranslationSelectionTests: XCTestCase {
+    func testSwitchingTranslationsChangesReferenceLanguageAndSuggestions() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        try "GEN 1:1 God appears in this test verse.\n"
+            .write(to: directory.appendingPathComponent("EnglishBible.txt"), atomically: true, encoding: .utf8)
+        try "GEN 1:1 Gott steht in diesem Testvers.\n"
+            .write(to: directory.appendingPathComponent("DeutschBible.txt"), atomically: true, encoding: .utf8)
+        let library = try BibleLibrary(directory: directory)
+        await MainActor.run {
+            let suite = "NotchBibleTests.\(UUID().uuidString)"
+            let preferences = UserDefaults(suiteName: suite)!
+            defer { preferences.removePersistentDomain(forName: suite) }
+            let model = LookupModel(library: library, preferences: preferences)
+            model.selectTranslation("English")
+            model.query = "gen1:1"
+            XCTAssertEqual(model.resultSummary, "Genesis 1:1")
+            model.selectTranslation("Deutsch")
+            XCTAssertEqual(model.query, "gen1:1")
+            XCTAssertEqual(model.resultSummary, "1. Mose 1:1")
+            XCTAssertTrue(model.bible.text(for: model.result.passages).hasPrefix("1. Mose 1:1 (Deutsch)"))
+            model.query = "1.Mo"
+            XCTAssertEqual(model.result.suggestions.first?.book.name, "1. Mose")
+            model.submit()
+            XCTAssertEqual(model.query, "1. Mose 1:1")
+            XCTAssertEqual(model.resultSummary, "1. Mose 1:1")
+        }
+    }
+
     func testSearchUsesSelectedTranslationAndKeepsAllHitsForCopy() async throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
