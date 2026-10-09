@@ -63,4 +63,76 @@ final class BibleLibraryTests: XCTestCase {
             XCTAssertTrue(error.localizedDescription.contains("BrokenBible.txt"))
         }
     }
+
+    func testUserTranslationsMergeAndRemovalIsPickedUpOnNextLoad() throws {
+        let directories = try makeTranslationDirectories()
+        defer { try? FileManager.default.removeItem(at: directories.root) }
+        try "GEN 1:1 Bundled text\n".write(to: directories.bundled.appendingPathComponent("AlphaBible.txt"), atomically: true, encoding: .utf8)
+        let personalFile = directories.user.appendingPathComponent("PersonalBible.TXT")
+        try "HEB 13:7 Personal hope\nHEB 13:13 More hope\n".write(to: personalFile, atomically: true, encoding: .utf8)
+        try "Ignored".write(to: directories.user.appendingPathComponent("README.md"), atomically: true, encoding: .utf8)
+
+        let library = try BibleLibrary(directory: directories.bundled, additionalDirectory: directories.user)
+        XCTAssertEqual(library.translations.map(\.translation), ["Alpha", "Personal"])
+        XCTAssertTrue(library.loadingWarnings.isEmpty)
+        let personal = try XCTUnwrap(library.bible(named: "PERSONAL"))
+        XCTAssertEqual(ReferenceParser(bible: personal).lookup("heb13.7+13").verseCount, 2)
+        XCTAssertEqual(BibleLookupEngine(bible: personal).lookup("hope").verseCount, 2)
+
+        try FileManager.default.removeItem(at: personalFile)
+        let nextLaunch = try BibleLibrary(directory: directories.bundled, additionalDirectory: directories.user)
+        XCTAssertEqual(nextLaunch.translations.map(\.translation), ["Alpha"])
+        XCTAssertTrue(nextLaunch.loadingWarnings.isEmpty)
+    }
+
+    func testMissingUserDirectoryUsesBundledTranslations() throws {
+        let directories = try makeTranslationDirectories()
+        defer { try? FileManager.default.removeItem(at: directories.root) }
+        try "GEN 1:1 Bundled text\n".write(to: directories.bundled.appendingPathComponent("AlphaBible.txt"), atomically: true, encoding: .utf8)
+        try FileManager.default.removeItem(at: directories.user)
+
+        let library = try BibleLibrary(directory: directories.bundled, additionalDirectory: directories.user)
+        XCTAssertEqual(library.translations.map(\.translation), ["Alpha"])
+        XCTAssertTrue(library.loadingWarnings.isEmpty)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: directories.user.path))
+    }
+
+    func testBadAndDuplicateUserFilesDoNotHideBundledTranslations() throws {
+        let directories = try makeTranslationDirectories()
+        defer { try? FileManager.default.removeItem(at: directories.root) }
+        try "GEN 1:1 Bundled text\n".write(to: directories.bundled.appendingPathComponent("AlphaBible.txt"), atomically: true, encoding: .utf8)
+        try "GEN 1:1 Replacement\n".write(to: directories.user.appendingPathComponent("alpha.txt"), atomically: true, encoding: .utf8)
+        try "Invalid record".write(to: directories.user.appendingPathComponent("BrokenBible.txt"), atomically: true, encoding: .utf8)
+        try "PSA 1:1 Personal text\n".write(to: directories.user.appendingPathComponent("PersonalBible.txt"), atomically: true, encoding: .utf8)
+
+        let library = try BibleLibrary(directory: directories.bundled, additionalDirectory: directories.user)
+        XCTAssertEqual(library.translations.map(\.translation), ["Alpha", "Personal"])
+        XCTAssertEqual(library.defaultTranslation.verses.first?.text, "Bundled text")
+        XCTAssertEqual(library.loadingWarnings.count, 2)
+        XCTAssertTrue(library.loadingWarnings.contains { $0.contains("alpha.txt") && $0.contains("duplicate translation name") })
+        XCTAssertTrue(library.loadingWarnings.contains { $0.contains("BrokenBible.txt") })
+    }
+
+    func testUserPathThatIsNotDirectoryReportsWarningWithoutPreventingLaunch() throws {
+        let directories = try makeTranslationDirectories()
+        defer { try? FileManager.default.removeItem(at: directories.root) }
+        try "GEN 1:1 Bundled text\n".write(to: directories.bundled.appendingPathComponent("AlphaBible.txt"), atomically: true, encoding: .utf8)
+        try FileManager.default.removeItem(at: directories.user)
+        try "Not a directory".write(to: directories.user, atomically: true, encoding: .utf8)
+
+        let library = try BibleLibrary(directory: directories.bundled, additionalDirectory: directories.user)
+        XCTAssertEqual(library.translations.map(\.translation), ["Alpha"])
+        XCTAssertEqual(library.loadingWarnings.count, 1)
+        XCTAssertTrue(library.loadingWarnings[0].contains(directories.user.path))
+    }
+
+    private func makeTranslationDirectories() throws -> (root: URL, bundled: URL, user: URL) {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let bundled = root.appendingPathComponent("Bundled", isDirectory: true)
+        let user = root.appendingPathComponent("User", isDirectory: true)
+        for directory in [bundled, user] {
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        }
+        return (root, bundled, user)
+    }
 }

@@ -7,8 +7,11 @@ enum NotchBibleApp {
     static func main() {
         do {
             let start = CFAbsoluteTimeGetCurrent()
-            let library = try BibleLibrary.bundled()
+            let library = try BibleLibrary.bundled(additionalDirectory: BibleLibrary.userTranslationsDirectory)
             let arguments = Array(CommandLine.arguments.dropFirst())
+            for warning in library.loadingWarnings {
+                FileHandle.standardError.write(Data("NotchBible: \(warning)\n".utf8))
+            }
             var bible = library.defaultTranslation
             if let index = arguments.firstIndex(of: "--translation"), arguments.indices.contains(index + 1) {
                 let name = arguments[index + 1]

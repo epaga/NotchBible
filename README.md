@@ -30,7 +30,7 @@ You do not need Xcode or any developer tools to use the download.
   references and the translation name.
 - **Works with any Mac display:** use the notch, menu bar icon, or keyboard shortcut.
 - **A panel that fits:** it grows with the passage, can be resized, and remembers its size.
-- **Optional translations:** add your own texts through a [local build](#add-your-own-translations)
+- **Optional translations:** add your own text files to a [local folder](#add-your-own-translations)
   and switch between them with tabs. Your last selection is remembered.
 
 No accounts, analytics, or network requests. Your lookups and searches stay on your Mac.
@@ -43,6 +43,7 @@ No accounts, analytics, or network requests. Your lookups and searches stay on y
 | Look up or search | Type in the field; results update on each edit |
 | Copy a complete result | Click the copy icon, press **Return**, or press **Shift–Command–C** |
 | Dismiss | Press **Escape** or click outside the panel |
+| Add translation files | Right-click the menu bar book → **Open Translations Folder…** |
 | About or Quit | Right-click the menu bar book |
 
 Opening the panel selects your previous input so you can replace it immediately.
@@ -88,11 +89,15 @@ for more filters and combinations.
 
 ## Add your own translations
 
-**The download includes NET only.** Extra translations are currently added through
-[a local build](docs/DEVELOPMENT.md#add-local-translations). The app reads its texts
-from its app bundle; editing the signed download directly invalidates its signature.
+**The download includes NET only.** You can add other translations without rebuilding
+the app. Right-click the book icon in the menu bar and choose **Open Translations
+Folder…**. This creates and opens:
 
-To prepare a translation:
+```text
+~/Library/Application Support/NotchBible/Translations
+```
+
+To add a translation:
 
 1. Obtain a Bible text you have permission to use and save it as a plain **UTF-8 `.txt`** file.
 2. Give it a distinct name, such as `MyTranslationBible.txt`. Its tab will be called
@@ -107,16 +112,19 @@ To prepare a translation:
 4. Use the [supported book codes](Sources/BibleCore/Books.swift), such as `GEN`, `PSA`,
    and `JOH`, and avoid duplicate verse addresses. A file may contain just some
    books or chapters; missing passages are shown as unavailable.
-5. Follow the [build and translation instructions](docs/DEVELOPMENT.md#add-local-translations)
-   to add the file to `Sources/BibleCore/Resources`, rebuild, and open your local app.
+5. Copy the `.txt` file into the Translations folder, then **quit and reopen
+   NotchBible**. Enter a reference or search to see its tab below the results.
 
 Select a translation's tab below the results to switch editions. Switching keeps
 your current reference or search, and the app remembers your selection.
 Each edition uses its own verse numbering. Copied passages identify the selected
 translation; NET copies also include its copyright acknowledgment.
 
-Keep a separate copy of your translation files for future builds or app updates.
-Bible texts retain their own copyrights and permissions.
+To update or remove a translation, replace or remove its file and restart the app.
+Files in this folder stay in place when you update NotchBible. Keep your own backups.
+Invalid files or duplicate translation names are skipped with a warning; a user
+file cannot replace a bundled edition such as NET. Bible texts retain their own
+copyrights and permissions.
 
 ## Credits and source
 
@@ -129,5 +137,5 @@ The app uses native macOS controls and panels. Its panel architecture is inspire
 by [Alejandro Buján's Tendedero](https://github.com/alejandrobujan/tendedero).
 NotchBible's interface and icon are original.
 
-For source builds, custom translation builds, tests, implementation details, and
+For source builds, bundled translations, tests, implementation details, and
 release packaging, see [Building and developing NotchBible](docs/DEVELOPMENT.md).

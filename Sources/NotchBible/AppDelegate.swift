@@ -52,6 +52,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             // A first-launch introduction stays passive until clicked.
             show(on: ScreenGeometry.underPointer(), focus: false)
         }
+        if !model.library.loadingWarnings.isEmpty {
+            let alert = NSAlert()
+            alert.messageText = "Some translations couldn’t be loaded"
+            alert.informativeText = model.library.loadingWarnings.joined(separator: "\n\n")
+                + "\n\nFix or remove these files in your Translations folder, then quit and reopen NotchBible. Other translations are ready to use."
+            alert.addButton(withTitle: "Open Translations Folder")
+            alert.addButton(withTitle: "Continue")
+            if alert.runModal() == .alertFirstButtonReturn { openTranslationsFolder() }
+        }
     }
     func applicationWillTerminate(_ notification: Notification) {
         monitors.forEach(NSEvent.removeMonitor)
@@ -164,6 +173,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             hide()
             let menu = NSMenu()
             menu.addItem(withTitle: "Open NotchBible", action: #selector(openFromMenu), keyEquivalent: "").target = self
+            menu.addItem(withTitle: "Open Translations Folder…", action: #selector(openTranslationsFolder), keyEquivalent: "").target = self
             menu.addItem(.separator())
             menu.addItem(withTitle: "About NotchBible", action: #selector(about), keyEquivalent: "").target = self
             menu.addItem(withTitle: "Quit NotchBible", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
@@ -171,6 +181,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         } else { toggle(on: ScreenGeometry.underPointer()) }
     }
     @objc private func openFromMenu() { show(on: ScreenGeometry.underPointer(), focus: true) }
+    @objc private func openTranslationsFolder() {
+        do {
+            let directory = BibleLibrary.userTranslationsDirectory
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+            NSWorkspace.shared.open(directory)
+        } catch {
+            NSAlert(error: error).runModal()
+        }
+    }
     @objc private func about() {
         let alert = NSAlert()
         alert.messageText = "NotchBible"
@@ -183,6 +202,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let app = NSMenuItem()
         let appMenu = NSMenu()
         appMenu.addItem(withTitle: "About NotchBible", action: #selector(about), keyEquivalent: "").target = self
+        appMenu.addItem(withTitle: "Open Translations Folder…", action: #selector(openTranslationsFolder), keyEquivalent: "").target = self
         appMenu.addItem(.separator())
         appMenu.addItem(withTitle: "Quit NotchBible", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         app.submenu = appMenu

@@ -1,7 +1,7 @@
 # Building and developing NotchBible
 
 For downloading the DMG and using the app, see the [main README](../README.md).
-This page covers building from source, adding translations to a local build,
+This page covers building from source, bundling translations in a local build,
 reference and search details, development, and signed releases.
 
 [Build from source](#build-and-run-from-source) ·
@@ -33,6 +33,16 @@ The built app is self-contained; it does not need this checkout. You can drag
 you supply `SIGN_IDENTITY`. They are not notarized.
 
 ## Add local translations
+
+The installed app also loads `.txt` files from
+`~/Library/Application Support/NotchBible/Translations` at launch. Use **Open
+Translations Folder…** in the menu bar icon's right-click menu to create and open
+it. Files added there work with the signed download and survive app replacement;
+see the [user instructions](../README.md#add-your-own-translations).
+Restart after adding, changing, or removing files. Invalid user files and
+duplicate names are skipped with a warning; bundled editions take precedence.
+
+For a development build, you can also bundle additional texts:
 
 **This repository includes NET only.** Additional translations can be supplied
 locally for use under their own terms; their texts are ignored by Git. The resource
@@ -68,7 +78,9 @@ access the network. Copied passages always identify the selected edition.
 rules do not affect SwiftPM or the app build script: a build from a checkout
 containing additional local `.txt` files includes those texts in the app.
 Run `build/NotchBible.app/Contents/MacOS/NotchBible --check` to list the
-translations in a built app before distributing it. Additional texts need their
+available translations, including the user's Translations folder. Check
+`build/NotchBible.app/Contents/Resources` to confirm which texts are actually
+bundled before distributing it. Additional texts need their
 own redistribution permission and attribution.
 
 ## References
@@ -147,7 +159,9 @@ build/NotchBible.app/Contents/MacOS/NotchBible --translation NET --lookup 'heb13
 Tests cover reference examples, shorthand, punctuation, ranges, lists,
 ambiguity, typos, incomplete/invalid input, copy attribution, corrupted data,
 and a round trip of **every NET verse address**, plus translation discovery,
-edition-specific addressing, partial coverage, and persistent selection. Search
+edition-specific addressing, partial coverage, persistent selection, and merging
+user translations while handling missing folders, invalid files, and duplicate
+names. Search
 tests cover AND, phrases, exclusions, wildcards, filter grouping, Unicode casing,
 reference fallback, translation switching, complete copying, and comparisons
 against an independent text scan of every bundled translation. `--benchmark`
