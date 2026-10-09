@@ -5,6 +5,7 @@ public struct BibleBook: Identifiable, Hashable, Sendable {
     public let code: String
     public let name: String
     public let aliases: [String]
+    public var isSingleChapter: Bool { ["OBA", "PHM", "2JO", "3JO", "JUD"].contains(code) }
 
     public static let all: [BibleBook] = {
         let entries: [(String, String, String)] = [

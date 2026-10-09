@@ -14,7 +14,9 @@ trap 'rm -rf "$STAGING_DIRECTORY"' EXIT
 APP="$STAGING_DIRECTORY/NotchBible.app"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$BINARY_DIRECTORY/NotchBible" "$APP/Contents/MacOS/NotchBible"
-cp Sources/BibleCore/Resources/NETBible.txt "$APP/Contents/Resources/"
+for TEXT_FILE in Sources/BibleCore/Resources/*.[tT][xX][tT]; do
+    [[ -f "$TEXT_FILE" ]] && cp "$TEXT_FILE" "$APP/Contents/Resources/"
+done
 cp THIRD-PARTY-NOTICES.md "$APP/Contents/Resources/"
 cp packaging/Info.plist "$APP/Contents/Info.plist"
 swift scripts/make-icon.swift "$STAGING_DIRECTORY/NotchBible.iconset"

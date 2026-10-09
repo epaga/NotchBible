@@ -7,19 +7,28 @@ enum NotchBibleApp {
     static func main() {
         do {
             let start = CFAbsoluteTimeGetCurrent()
-            let bible = try BibleStore.bundled()
+            let library = try BibleLibrary.bundled()
             let arguments = Array(CommandLine.arguments.dropFirst())
+            var bible = library.defaultTranslation
+            if let index = arguments.firstIndex(of: "--translation"), arguments.indices.contains(index + 1) {
+                let name = arguments[index + 1]
+                guard let translation = library.bible(named: name) else { throw CLIError.message("No local translation named \(name).") }
+                bible = translation
+            }
             if arguments.contains("--check") {
-                print("NET Bible: 66 books, \(bible.chapterCount) chapters, \(bible.verses.count) verse addresses (\(bible.verses.filter { !$0.isOmitted }.count) with text).")
+                for bible in library.translations {
+                    print("\(bible.translation): \(bible.bookCount) books, \(bible.chapterCount) chapters, \(bible.verses.count) verse addresses (\(bible.verses.filter { !$0.isOmitted }.count) with text).")
+                }
                 print(String(format: "Loaded and indexed locally in %.1f ms.", (CFAbsoluteTimeGetCurrent() - start) * 1_000))
                 return
             }
             if let index = arguments.firstIndex(of: "--lookup"), arguments.indices.contains(index + 1) {
-                let result = ReferenceParser(bible: bible).lookup(arguments[index + 1])
+                let result = BibleLookupEngine(bible: bible).lookup(arguments[index + 1])
                 if let error = result.error { throw CLIError.message(error) }
                 if !result.suggestions.isEmpty {
                     print(result.suggestions.map(\.query).joined(separator: "\n"))
-                } else { print(bible.text(for: result.passages)) }
+                } else if result.passages.isEmpty { print(result.hint ?? "No verses selected.") }
+                else { print(bible.text(for: result.passages)) }
                 return
             }
             if arguments.contains("--benchmark") {
@@ -35,11 +44,23 @@ enum NotchBibleApp {
                 }
                 samples.sort()
                 print(String(format: "%d lookups · p50 %.3f ms · p95 %.3f ms · max %.3f ms", samples.count, samples[samples.count / 2], samples[Int(Double(samples.count) * 0.95)], samples.last!))
+                let lookup = BibleLookupEngine(bible: bible)
+                let searches = ["created God", "\"for God\"", "love* -world", "book:gen book:ps created God", "in:ot God", "in:nt love", "in:ot in:nt God", "*love*", "-God", "*"]
+                var searchSamples: [Double] = []
+                for _ in 0..<100 {
+                    for search in searches {
+                        let time = CFAbsoluteTimeGetCurrent()
+                        _ = lookup.lookup(search)
+                        searchSamples.append((CFAbsoluteTimeGetCurrent() - time) * 1_000)
+                    }
+                }
+                searchSamples.sort()
+                print(String(format: "%d searches · p50 %.3f ms · p95 %.3f ms · max %.3f ms", searchSamples.count, searchSamples[searchSamples.count / 2], searchSamples[Int(Double(searchSamples.count) * 0.95)], searchSamples.last!))
                 return
             }
             let app = NSApplication.shared
             app.setActivationPolicy(.accessory)
-            let delegate = AppDelegate(bible: bible, preview: arguments.contains("--preview"))
+            let delegate = AppDelegate(library: library, preview: arguments.contains("--preview"))
             app.delegate = delegate
             withExtendedLifetime(delegate) { app.run() }
         } catch {

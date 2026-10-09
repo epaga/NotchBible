@@ -11,7 +11,7 @@ public struct BibleVerse: Identifiable, Sendable {
     public let address: VerseAddress
     public let text: String
     public var book: BibleBook { BibleBook.all[address.book] }
-    /// Some traditional verse numbers have no text in this NET edition.
+    /// Some traditional verse numbers have no text in the source edition.
     public var isOmitted: Bool { text.isEmpty }
 }
 
@@ -27,35 +27,45 @@ public enum BibleDataError: LocalizedError {
     case invalidData(String)
     public var errorDescription: String? {
         switch self {
-        case .missingResource: return "The bundled NET Bible text could not be found. Rebuild the app with scripts/build-app.sh."
-        case .invalidData(let reason): return "The NET Bible text is incomplete or damaged: \(reason)"
+        case .missingResource: return "No bundled Bible text was found. Rebuild the app with scripts/build-app.sh."
+        case .invalidData(let reason): return "The Bible text is incomplete or damaged: \(reason)"
         }
     }
 }
 
 /// An immutable, in-memory address index, built once. Lookup is a dictionary
 /// access plus a slice of the canonical verse array, never a scan of the Bible.
-public final class BibleStore: Sendable {
+public final class BibleStore: Identifiable, Sendable {
     public static let copyright = "Scripture quoted by permission. Quotations designated (NET) are from the NET Bible® copyright ©1996, 2019 by Biblical Studies Press, L.L.C. https://netbible.com. All rights reserved."
     public let verses: [BibleVerse]
+    public let translation: String
+    public var id: String { translation }
+    public var attribution: String? { translation.uppercased() == "NET" ? Self.copyright : nil }
+    public let bookCount: Int
     public let chapterCount: Int
     private let addresses: [VerseAddress: Int]
-    private let chapters: [[Range<Int>]]
+    private let chapters: [[Range<Int>?]]
+    private let searchIndex: VerseSearchIndex
+
+    static var resourceDirectory: URL? {
+        let bundle = Bundle.main.bundleURL.pathExtension == "app" ? Bundle.main : Bundle.module
+        return bundle.resourceURL
+    }
 
     public static func bundled() throws -> BibleStore {
         // The .app ships a plain resource; SwiftPM supplies its resource bundle
         // for `swift run` and tests. Neither route ever downloads anything.
-        let bundle = Bundle.main.bundleURL.pathExtension == "app" ? Bundle.main : Bundle.module
-        let url = bundle.url(forResource: "NETBible", withExtension: "txt")
-        guard let url else { throw BibleDataError.missingResource }
+        guard let directory = resourceDirectory else { throw BibleDataError.missingResource }
+        let url = directory.appendingPathComponent("NETBible.txt")
+        guard FileManager.default.fileExists(atPath: url.path) else { throw BibleDataError.missingResource }
         return try BibleStore(text: String(contentsOf: url, encoding: .utf8))
     }
 
-    public init(text: String) throws {
+    public init(text: String, translation: String = "NET", requiresCompleteBible: Bool = true) throws {
         let byCode = Dictionary(uniqueKeysWithValues: BibleBook.all.map { ($0.code, $0.id) })
         var verses: [BibleVerse] = []
         var addresses: [VerseAddress: Int] = [:]
-        var chapters = Array(repeating: [Range<Int>](), count: 66)
+        var chapters = Array(repeating: [Range<Int>?](), count: 66)
         verses.reserveCapacity(31_102)
         addresses.reserveCapacity(31_102)
         var previous: VerseAddress?
@@ -66,7 +76,7 @@ public final class BibleStore: Sendable {
             }
             let location = pieces[1].split(separator: ":")
             guard location.count == 2, let chapter = Int(location[0]), let verse = Int(location[1]),
-                  chapter > 0, verse > 0 else {
+                  chapter > 0, chapter <= 150, verse > 0 else {
                 throw BibleDataError.invalidData("invalid verse address")
             }
             let address = VerseAddress(book: book, chapter: chapter, verse: verse)
@@ -77,27 +87,35 @@ public final class BibleStore: Sendable {
                 }
             }
             if chapter > chapters[book].count {
-                guard chapter == chapters[book].count + 1 else {
+                guard !requiresCompleteBible || chapter == chapters[book].count + 1 else {
                     throw BibleDataError.invalidData("missing chapter in \(BibleBook.all[book].name)")
                 }
+                chapters[book].append(contentsOf: repeatElement(nil, count: chapter - chapters[book].count - 1))
                 chapters[book].append(verses.count..<(verses.count + 1))
             } else {
-                chapters[book][chapter - 1] = chapters[book][chapter - 1].lowerBound..<(verses.count + 1)
+                let start = chapters[book][chapter - 1]?.lowerBound ?? verses.count
+                chapters[book][chapter - 1] = start..<(verses.count + 1)
             }
             addresses[address] = verses.count
             verses.append(BibleVerse(id: verses.count, address: address, text: String(pieces[2])))
             previous = address
         }
-        guard chapters.allSatisfy({ !$0.isEmpty }), chapters.reduce(0, { $0 + $1.count }) == 1_189,
-              verses.count == 31_102, verses.first?.address == VerseAddress(book: 0, chapter: 1, verse: 1),
-              verses.last?.address == VerseAddress(book: 65, chapter: 22, verse: 21) else {
+        guard !verses.isEmpty else { throw BibleDataError.invalidData("no verse records") }
+        guard !requiresCompleteBible || (chapters.allSatisfy({ !$0.isEmpty }) && chapters.reduce(0, { $0 + $1.count }) == 1_189 &&
+              verses.count == 31_102 && verses.first?.address == VerseAddress(book: 0, chapter: 1, verse: 1) &&
+              verses.last?.address == VerseAddress(book: 65, chapter: 22, verse: 21)) else {
             throw BibleDataError.invalidData("expected 66 books, 1,189 chapters, and 31,102 verses")
         }
+        self.translation = translation
         self.verses = verses
         self.addresses = addresses
         self.chapters = chapters
-        self.chapterCount = 1_189
+        self.bookCount = chapters.filter { !$0.isEmpty }.count
+        self.chapterCount = chapters.reduce(0) { $0 + $1.compactMap { $0 }.count }
+        self.searchIndex = VerseSearchIndex(verses: verses)
     }
+
+    public func search(_ input: String) -> ReferenceLookup { searchIndex.lookup(input, verses: verses) }
 
     public func chapterCount(in book: BibleBook) -> Int { chapters[book.id].count }
     public func chapterRange(book: BibleBook, chapter: Int) -> Range<Int>? {
@@ -114,9 +132,9 @@ public final class BibleStore: Sendable {
     public func text(for passages: [BiblePassage]) -> String {
         passages.map { passage in
             let body = verses[passage.range].map { verse in
-                "\(verse.address.chapter):\(verse.address.verse) \(verse.isOmitted ? "[This verse number has no text in this NET edition.]" : verse.text)"
+                "\(verse.address.chapter):\(verse.address.verse) \(verse.isOmitted ? "[This verse number has no text in this \(translation) edition.]" : verse.text)"
             }.joined(separator: "\n")
-            return "\(passage.reference) (NET)\n\(body)"
-        }.joined(separator: "\n\n") + "\n\n" + Self.copyright
+            return "\(passage.reference) (\(translation))\n\(body)"
+        }.joined(separator: "\n\n") + (attribution.map { "\n\n" + $0 } ?? "")
     }
 }

@@ -13,14 +13,14 @@ struct ReferenceField: NSViewRepresentable {
         field.focusRingType = .none
         field.font = .systemFont(ofSize: 21, weight: .regular)
         field.textColor = NSColor(calibratedRed: 0.94, green: 0.92, blue: 0.87, alpha: 1)
-        field.placeholderAttributedString = NSAttributedString(string: "Genesis 1:1", attributes: [
+        field.placeholderAttributedString = NSAttributedString(string: "Reference or search", attributes: [
             .foregroundColor: NSColor(calibratedWhite: 0.48, alpha: 1),
             .font: NSFont.systemFont(ofSize: 21)
         ])
         field.delegate = context.coordinator
         field.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-        field.setAccessibilityLabel("Bible reference")
-        field.setAccessibilityHelp("Enter a reference, such as Genesis 1:1 or gen1.1-2.3. Results appear as you type.")
+        field.setAccessibilityLabel("Bible reference or search")
+        field.setAccessibilityHelp("Enter a reference or search words. Use quotes for phrases, a minus to exclude, * for wildcards, book:gen for a book, and in:ot or in:nt for a testament. Results appear as you type.")
         field.lineBreakMode = .byTruncatingHead
         return field
     }

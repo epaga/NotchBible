@@ -6,8 +6,9 @@ let package = Package(
     platforms: [.macOS(.v14)],
     products: [.executable(name: "NotchBible", targets: ["NotchBible"])],
     targets: [
-        .target(name: "BibleCore", resources: [.copy("Resources/NETBible.txt")]),
+        .target(name: "BibleCore", resources: [.process("Resources")]),
         .executableTarget(name: "NotchBible", dependencies: ["BibleCore"]),
-        .testTarget(name: "BibleCoreTests", dependencies: ["BibleCore"])
+        .testTarget(name: "BibleCoreTests", dependencies: ["BibleCore"]),
+        .testTarget(name: "NotchBibleTests", dependencies: ["NotchBible", "BibleCore"])
     ]
 )

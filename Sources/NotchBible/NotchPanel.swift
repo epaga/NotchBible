@@ -14,6 +14,8 @@ final class LookupPanel: NSPanel {
     var onCopy: (() -> Void)?
     var onFocus: (() -> Void)?
     var onDismiss: (() -> Void)?
+    var onResize: ((NSSize) -> Void)?
+    var onResizeEnd: (() -> Void)?
     init(model: LookupModel) {
         super.init(contentRect: .zero, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
         title = "NotchBible"
@@ -45,6 +47,58 @@ final class LookupPanel: NSPanel {
             onFocus?(); return true
         }
         return super.performKeyEquivalent(with: event)
+    }
+}
+
+struct PanelResizeHandle: NSViewRepresentable {
+    func makeNSView(context: Context) -> NSView { PanelResizeView() }
+    func updateNSView(_ nsView: NSView, context: Context) {}
+}
+
+@MainActor
+private final class PanelResizeView: NSView {
+    private var startFrame: NSRect?
+    private var startPoint: NSPoint?
+
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        toolTip = "Drag to resize"
+        setAccessibilityLabel("Resize NotchBible")
+    }
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+    override func resetCursorRects() {
+        if #available(macOS 15, *) {
+            addCursorRect(bounds, cursor: .frameResize(position: .bottomRight, directions: .all))
+        } else { addCursorRect(bounds, cursor: .crosshair) }
+    }
+    override func mouseDown(with event: NSEvent) {
+        startFrame = window?.frame
+        startPoint = ScreenGeometry.location(of: event)
+    }
+    override func mouseDragged(with event: NSEvent) {
+        guard let startFrame, let startPoint, let panel = window as? LookupPanel else { return }
+        let point = ScreenGeometry.location(of: event)
+        // Both sides move by the pointer's horizontal delta. The top stays
+        // attached to the notch while the bottom follows its vertical delta.
+        panel.onResize?(NSSize(width: max(1, startFrame.width + 2 * (point.x - startPoint.x)),
+                               height: max(1, startFrame.height - (point.y - startPoint.y))))
+    }
+    override func mouseUp(with event: NSEvent) {
+        guard startFrame != nil else { return }
+        startFrame = nil
+        startPoint = nil
+        (window as? LookupPanel)?.onResizeEnd?()
+    }
+    override func draw(_ dirtyRect: NSRect) {
+        NSColor.white.withAlphaComponent(0.35).setStroke()
+        let grip = NSBezierPath()
+        grip.lineWidth = 1
+        for inset in [CGFloat(0), 5, 10] {
+            grip.move(to: NSPoint(x: 7 + inset, y: 5))
+            grip.line(to: NSPoint(x: 19, y: 17 - inset))
+        }
+        grip.stroke()
     }
 }
 

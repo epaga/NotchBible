@@ -12,6 +12,7 @@ public struct ReferenceLookup: Sendable {
     public var hint: String?
     public var error: String?
     public var isIncomplete = false
+    public var isSearch = false
     public var verseCount: Int { passages.reduce(0) { $0 + $1.count } }
     public var canCopy: Bool { !passages.isEmpty && error == nil && !isIncomplete }
     public init() {}
@@ -24,6 +25,20 @@ public final class ReferenceParser: Sendable {
     public let bible: BibleStore
     private let books = BookIndex()
     public init(bible: BibleStore) { self.bible = bible }
+
+    func recognizesReference(_ input: String) -> Bool {
+        // Quotes and wildcards explicitly select search, even for book names.
+        guard input.count <= 2_048, !input.contains(where: { "\"“”*".contains($0) }) else { return false }
+        let normalized = Self.normalize(input)
+        if ["1", "2", "3"].contains(normalized) { return true }
+        guard let match = Self.bookPrefix.firstMatch(in: normalized, range: NSRange(normalized.startIndex..., in: normalized)),
+              let nameRange = Range(match.range(at: 1), in: normalized) else { return false }
+        let resolution = books.resolve(String(normalized[nameRange]))
+        guard !resolution.books.isEmpty else { return false }
+        let rest = normalized.dropFirst(match.range.length).trimmingCharacters(in: .whitespaces)
+        // Bare fuzzy matches (e.g. “sons” → Song of Solomon) are search words.
+        return rest.isEmpty ? !resolution.corrected : rest.first?.isNumber == true
+    }
 
     public func lookup(_ input: String) -> ReferenceLookup {
         var result = ReferenceLookup()
@@ -166,17 +181,26 @@ public final class ReferenceParser: Sendable {
             return Point(chapter: first, verse: verse)
         }
         if let inheritedChapter { return Point(chapter: inheritedChapter, verse: first) }
-        if bible.chapterCount(in: book) == 1 { return Point(chapter: 1, verse: first) }
+        if book.isSingleChapter { return Point(chapter: 1, verse: first) }
         return Point(chapter: first, verse: nil)
     }
 
     private func makePassage(book: BibleBook, start: Point, end: Point, rangeGiven: Bool) throws -> BiblePassage {
         func offset(_ point: Point, last: Bool) throws -> Int {
             guard let chapter = bible.chapterRange(book: book, chapter: point.chapter) else {
+                if bible.chapterCount(in: book) == 0 {
+                    throw ParseError.message("\(book.name) isn’t included in \(bible.translation).")
+                }
+                if point.chapter <= bible.chapterCount(in: book) {
+                    throw ParseError.message("\(book.name) \(point.chapter) isn’t included in \(bible.translation).")
+                }
                 throw ParseError.message("\(book.name) has \(bible.chapterCount(in: book)) chapters.")
             }
             if let verse = point.verse {
                 guard let index = bible.offset(book: book, chapter: point.chapter, verse: verse) else {
+                    if verse > 0, verse <= (bible.verseCount(book: book, chapter: point.chapter) ?? 0) {
+                        throw ParseError.message("\(book.name) \(point.chapter):\(verse) isn’t included in \(bible.translation).")
+                    }
                     throw ParseError.message("\(book.name) \(point.chapter) has \(bible.verseCount(book: book, chapter: point.chapter) ?? 0) verses.")
                 }
                 return index

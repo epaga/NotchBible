@@ -1,0 +1,10 @@
+.build/
+build/
+.DS_Store
+.swiftpm/
+__pycache__/
+
+# Keep additional local translations, archives, and backups out of Git.
+# Only the NET text is distributed with this repository.
+/Sources/BibleCore/Resources/*
+!/Sources/BibleCore/Resources/NETBible.txt

@@ -20,6 +20,19 @@ Seventeen traditional verse addresses are blank in this edition. Their source
 records are preserved as supplied; the app explicitly identifies these empty
 addresses instead of substituting text from another translation.
 
+# Additional local translations
+
+This repository distributes **NET only**. Additional text files placed locally
+in `Sources/BibleCore/Resources` are ignored by Git and retain their respective
+copyrights. They are not covered by the app's MIT license, and the NET permissions
+and attribution above apply to NET alone.
+
+Both SwiftPM and `scripts/build-app.sh` bundle all local `.txt` files, including
+ones ignored by Git. Build publicly distributed apps from a clean checkout
+containing only NET. Including another translation requires its own redistribution
+permission and attribution; the app adds no publisher notice for non-NET texts.
+No additional translation texts are downloaded by the app.
+
 # Tendedero
 
 The native panel approach was inspired by

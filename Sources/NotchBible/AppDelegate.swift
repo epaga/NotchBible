@@ -15,8 +15,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var lastNotchClick: TimeInterval?
     private let preview: Bool
 
-    init(bible: BibleStore, preview: Bool) {
-        self.model = LookupModel(bible: bible)
+    init(library: BibleLibrary, preview: Bool) {
+        self.model = LookupModel(library: library)
         self.preview = preview
         super.init()
     }
@@ -28,6 +28,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         panel.onDismiss = model.onDismiss
         panel.onCopy = { [weak self] in self?.model.copy() }
         panel.onFocus = { [weak self] in self?.model.focus() }
+        panel.onResize = { [weak self] size in
+            guard let self, let screen = self.activeScreen else { return }
+            self.model.setPanelSize(self.clampedPanelSize(size, on: screen))
+        }
+        panel.onResizeEnd = { [weak self] in self?.model.savePanelSize() }
         shortcut = GlobalShortcut { [weak self] in self?.toggle(on: ScreenGeometry.underPointer()) }
         setUpStatusItem()
         rebuildTriggers()
@@ -81,7 +86,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         guard isOpen, let screen = activeScreen else { return }
         let top = ScreenGeometry.panelTop(on: screen)
         model.availableBodyHeight = max(120, min(370, top - screen.visibleFrame.minY - 190))
-        let width = min(580, screen.frame.width - 24)
+        let preferredSize = model.preferredPanelSize.map { clampedPanelSize($0, on: screen) }
+        if model.resizedPanelHeight != preferredSize?.height { model.resizedPanelHeight = preferredSize?.height }
+        let width = preferredSize?.width ?? min(580, screen.frame.width - 24)
         let notchWidth = ScreenGeometry.notchRect(on: screen)?.width ?? 0
         if model.notchWidth != notchWidth { model.notchWidth = notchWidth }
         let frame = NSRect(x: screen.frame.midX - width / 2, y: top - model.panelHeight,
@@ -91,6 +98,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Animating the window leaves that new layout inside the old bounds,
         // briefly clipping the field above the screen on the first character.
         panel.setFrame(frame, display: true, animate: false)
+    }
+    private func clampedPanelSize(_ size: NSSize, on screen: NSScreen) -> NSSize {
+        let maxWidth = max(1, screen.frame.width - 24)
+        let maxHeight = max(1, ScreenGeometry.panelTop(on: screen) - screen.visibleFrame.minY - 12)
+        return NSSize(width: min(max(size.width, 360), maxWidth),
+                      height: min(max(size.height, 260), maxHeight))
     }
     private func rebuildTriggers() {
         triggers.forEach { $0.orderOut(nil) }
@@ -161,7 +174,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @objc private func about() {
         let alert = NSAlert()
         alert.messageText = "NotchBible"
-        alert.informativeText = "A little space for the Word.\n\nThe complete NET Bible, available offline. Click your notch, the menu bar book, or press ⌃⌥B. Type a reference; press Return or click Copy.\n\nNET Bible text: ©1996–2016 Biblical Studies Press, L.L.C., sourced from eBible.org.\n\n" + BibleStore.copyright + "\n\nFree, noncommercial use. The app code is MIT licensed. Native panel architecture inspired by Alejandro Buján’s Tendedero."
+        alert.informativeText = "A little space for the Word.\n\nLocal translations: \(model.library.translations.map(\.translation).joined(separator: ", ")). Click your notch, the menu bar book, or press ⌃⌥B. Type a reference; press Return or click Copy.\n\nNET Bible text: ©1996–2016 Biblical Studies Press, L.L.C., sourced from eBible.org.\n\n" + BibleStore.copyright + "\n\nThe app code is MIT licensed. Bible texts retain their own copyrights. Native panel architecture inspired by Alejandro Buján’s Tendedero."
         alert.addButton(withTitle: "Done")
         alert.runModal()
     }

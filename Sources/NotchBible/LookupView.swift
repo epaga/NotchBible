@@ -21,7 +21,9 @@ struct LookupView: View {
                     if let error = model.result.error { errorView(error) }
                     else if !model.result.suggestions.isEmpty { suggestions }
                     else if model.hasPassages { passages }
+                    else if let hint = model.result.hint { errorView(hint) }
                 }.frame(height: model.bodyHeight, alignment: .top)
+                translationTabs.frame(height: model.translationBarHeight)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
@@ -44,6 +46,10 @@ struct LookupView: View {
                 }
         }
         .padding(.horizontal, 10).padding(.bottom, 12).padding(.top, model.notchWidth > 0 ? 0 : 6)
+        .overlay(alignment: .bottomTrailing) {
+            PanelResizeHandle().frame(width: 24, height: 24)
+                .padding(.trailing, 16).padding(.bottom, 16)
+        }
         .preferredColorScheme(.dark)
     }
 
@@ -51,6 +57,28 @@ struct LookupView: View {
         Text(error).font(.system(size: 13)).foregroundStyle(Palette.muted)
             .fixedSize(horizontal: false, vertical: true)
             .frame(maxWidth: .infinity, alignment: .leading).padding(25)
+    }
+
+    private var translationTabs: some View {
+        ScrollView(.horizontal) {
+            HStack(spacing: 18) {
+                ForEach(model.library.translations) { bible in
+                    let selected = bible.translation == model.selectedTranslation
+                    Button { model.selectTranslation(bible.translation) } label: {
+                        VStack(spacing: 5) {
+                            Text(bible.translation)
+                                .font(.system(size: 10, weight: selected ? .medium : .regular))
+                                .foregroundStyle(selected ? Palette.ink : Palette.muted)
+                            Capsule().fill(selected ? Palette.ink.opacity(0.8) : .clear)
+                                .frame(height: 1)
+                        }.padding(.vertical, 8).contentShape(Rectangle())
+                    }.buttonStyle(.plain)
+                        .help(bible.attribution ?? bible.translation)
+                        .accessibilityLabel(bible.translation)
+                        .accessibilityAddTraits(selected ? .isSelected : [])
+                }
+            }.padding(.horizontal, 25)
+        }.scrollIndicators(.hidden)
     }
 
     private var suggestions: some View {
@@ -81,12 +109,18 @@ struct LookupView: View {
     }
 
     private var passages: some View {
-        VStack(spacing: 0) {
+        let bible = model.bible
+        let passages = model.displayPassages
+        return VStack(spacing: 0) {
             HStack(spacing: 12) {
-                Text(model.result.passages.map(\.reference).joined(separator: "; "))
+                Text(model.resultSummary)
                     .font(.system(size: 11, weight: .medium)).foregroundStyle(Palette.gold.opacity(0.9))
                     .lineLimit(2)
                 Spacer(minLength: 0)
+                if model.searchPageCount > 1 {
+                    searchPageButton("chevron.left", delta: -1, disabled: model.searchPage == 0)
+                    searchPageButton("chevron.right", delta: 1, disabled: model.searchPage + 1 == model.searchPageCount)
+                }
                 Button { model.copy() } label: {
                     Image(systemName: model.copied ? "checkmark" : "doc.on.doc")
                         .font(.system(size: 13, weight: .regular))
@@ -94,47 +128,26 @@ struct LookupView: View {
                         .frame(width: 28, height: 28).contentShape(Rectangle())
                 }.buttonStyle(.plain).disabled(!model.result.canCopy)
                     .opacity(model.result.canCopy ? 1 : 0.35)
-                    .help("Copy passage · ↵ or ⇧⌘C")
-                    .accessibilityLabel(model.copied ? "Passage copied" : "Copy passage")
+                    .help(model.result.isSearch ? "Copy all matching verses · ↵ or ⇧⌘C" : "Copy passage · ↵ or ⇧⌘C")
+                    .accessibilityLabel(model.copied ? "Verses copied" : (model.result.isSearch ? "Copy all matching verses" : "Copy passage"))
             }.padding(.horizontal, 25).padding(.top, 12).padding(.bottom, 11)
 
-            ScrollView {
-                LazyVStack(alignment: .leading, spacing: 0) {
-                    ForEach(model.result.passages) { passage in
-                        if model.result.passages.count > 1 {
-                            Text(passage.reference).font(.system(size: 10, weight: .medium)).foregroundStyle(Palette.gold)
-                                .padding(.top, 8).padding(.bottom, 12)
-                        }
-                        ForEach(model.bible.verses[passage.range]) { verse in
-                            verseRow(verse, showChapter: model.result.passages.count > 1 ||
-                                     model.bible.verses[passage.range.lowerBound].address.chapter != model.bible.verses[passage.range.upperBound - 1].address.chapter)
-                        }
-                    }
-                    Link("NET", destination: URL(string: "https://netbible.org")!)
-                        .font(.system(size: 9)).foregroundStyle(Palette.muted.opacity(0.7))
-                        .help(BibleStore.copyright).padding(.top, 2)
-                }.padding(.horizontal, 25).padding(.bottom, 21)
-            }.scrollIndicators(.hidden).id(model.query)
+            PassageTextView(bible: bible, passages: passages, showsReferences: model.result.isSearch) { reference in
+                model.query = reference
+                model.focus()
+            }
+                .frame(height: max(0, model.bodyHeight - 51)).clipped()
         }
     }
 
-    private func verseRow(_ verse: BibleVerse, showChapter: Bool) -> some View {
-        HStack(alignment: .firstTextBaseline, spacing: 11) {
-            Text(showChapter ? "\(verse.address.chapter):\(verse.address.verse)" : "\(verse.address.verse)")
-                .font(.system(size: 9, weight: .medium, design: .monospaced))
-                .foregroundStyle(Palette.muted.opacity(0.8))
-                .frame(width: showChapter ? 33 : 14, alignment: .trailing)
-                .accessibilityLabel("Chapter \(verse.address.chapter), verse \(verse.address.verse)")
-            if verse.isOmitted {
-                Text("This verse number has no text in this NET edition.")
-                    .font(.system(size: 13)).italic().foregroundStyle(Palette.muted)
-                    .fixedSize(horizontal: false, vertical: true)
-            } else {
-                Text(verse.text).font(.system(size: 20, weight: .regular, design: .serif))
-                    .foregroundStyle(Palette.ink).lineSpacing(6)
-                    .fixedSize(horizontal: false, vertical: true).textSelection(.enabled)
-            }
-        }.frame(maxWidth: .infinity, alignment: .leading).padding(.bottom, 12)
+    private func searchPageButton(_ symbol: String, delta: Int, disabled: Bool) -> some View {
+        Button { model.moveSearchPage(delta) } label: {
+            Image(systemName: symbol).font(.system(size: 11))
+                .foregroundStyle(Palette.muted)
+                .frame(width: 24, height: 28).contentShape(Rectangle())
+        }.buttonStyle(.plain).disabled(disabled).opacity(disabled ? 0.35 : 1)
+            .help(delta < 0 ? "Previous matching verses" : "Next matching verses")
+            .accessibilityLabel(delta < 0 ? "Previous matching verses" : "Next matching verses")
     }
 }
 
