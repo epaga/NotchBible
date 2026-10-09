@@ -21,7 +21,11 @@ cp THIRD-PARTY-NOTICES.md "$APP/Contents/Resources/"
 cp packaging/Info.plist "$APP/Contents/Info.plist"
 swift scripts/make-icon.swift "$STAGING_DIRECTORY/NotchBible.iconset"
 iconutil -c icns "$STAGING_DIRECTORY/NotchBible.iconset" -o "$APP/Contents/Resources/NotchBible.icns"
-codesign --force --sign "${SIGN_IDENTITY:--}" "$APP"
+if [[ "${SIGN_IDENTITY:--}" == "-" ]]; then
+    codesign --force --sign - "$APP"
+else
+    codesign --force --sign "$SIGN_IDENTITY" --options runtime --timestamp "$APP"
+fi
 "$APP/Contents/MacOS/NotchBible" --check
 rm -rf build/NotchBible.app
 mv "$APP" build/NotchBible.app
