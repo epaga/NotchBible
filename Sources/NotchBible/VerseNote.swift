@@ -53,6 +53,16 @@ struct VerseNote: Codable, Identifiable, Equatable {
     var text = ""
     var style = AnnotationStyle.underline
     var color = 0
+
+    func searchNote(in bible: BibleStore) -> VerseSearchNote? {
+        guard translation == bible.translation else { return nil }
+        let offsets = segments.compactMap { segment -> Int? in
+            let verse = segment.verse
+            guard bible.books.indices.contains(verse.book) else { return nil }
+            return bible.offset(book: bible.books[verse.book], chapter: verse.chapter, verse: verse.verse)
+        }
+        return VerseSearchNote(text: text, verseIDs: offsets)
+    }
 }
 
 final class NoteStore {
@@ -70,6 +80,7 @@ final class NoteStore {
         guard FileManager.default.fileExists(atPath: url.path) else { return }
         do {
             notes = try JSONDecoder().decode([VerseNote].self, from: Data(contentsOf: url))
+                .filter { !$0.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
         } catch { loadError = error }
     }
 

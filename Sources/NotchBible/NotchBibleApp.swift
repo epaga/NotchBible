@@ -26,7 +26,8 @@ enum NotchBibleApp {
                 return
             }
             if let index = arguments.firstIndex(of: "--lookup"), arguments.indices.contains(index + 1) {
-                let result = BibleLookupEngine(bible: bible).lookup(arguments[index + 1])
+                let notes = NoteStore().notes.compactMap { $0.searchNote(in: bible) }
+                let result = BibleLookupEngine(bible: bible).lookup(arguments[index + 1], notes: notes)
                 if let error = result.error { throw CLIError.message(error) }
                 if !result.suggestions.isEmpty {
                     print(result.suggestions.map(\.query).joined(separator: "\n"))

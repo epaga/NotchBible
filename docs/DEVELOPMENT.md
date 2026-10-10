@@ -115,8 +115,10 @@ unfinished input previews the known portion and disables copying until complete.
 ## Full-text search
 
 When the input is not a recognized reference, it searches the selected translation
-locally and case insensitively. Each word must occur in the same verse. Words match
-whole words; use `*` for part of a word. Results stay in Bible order.
+and its personal notes locally and case insensitively. Each word must occur in a
+verse or one of its attached notes. Phrases must occur within a single verse or
+note. Words match whole words; use `*` for part of a word. Results stay in Bible
+order, with each verse shown once even when multiple notes match.
 
 | Input | Search |
 | --- | --- |
@@ -130,6 +132,18 @@ whole words; use `*` for part of a word. Results stay in Bible order.
 | `book:gen book:john in:nt love` | John only: different filters are ANDed |
 | `in:ot in:nt love` | Either testament: repeated filters are ORed |
 | `book:"1 John" love`, `love -book:ps` | A full book name, or an excluded book |
+| `note:love`, `note:"for God"` | A word or phrase only within notes |
+| `note:*` | All verses with notes; total note counts on every translation tab |
+| `note:love* book:gen`, `love -note:world` | Filter note matches by book, or exclude a note word |
+
+`note:` restricts its word or quoted phrase to notes in the selected translation.
+A matching note returns all verses it is attached to. Untagged words and phrases
+search both verse text and attached notes, including when combined with `note:`.
+Notes from other translations are excluded. Saving, editing, or deleting a note
+updates the current search immediately.
+With `note:*`, every translation tab shows its total number of notes, including
+the selected translation and translations with zero notes. These counts include
+all notes in that translation, regardless of which verses are visible.
 
 Book filters accept the same names and abbreviations as references. Phrases ignore
 punctuation between consecutive words. Quote a book name to search for that word
@@ -171,7 +185,8 @@ The text is loaded once into an immutable canonical verse array, a dictionary of
 verse-address offsets, and chapter ranges. Each translation also has an inverted
 word index, compact word positions for phrases, and book/testament postings.
 Searches intersect or subtract sorted verse IDs; wildcards expand the word
-vocabulary rather than scanning verse text. Book names and aliases have
+vocabulary rather than scanning verse text. Note text uses the same word and
+phrase rules and contributes its attached verse IDs to the search. Book names and aliases have
 precomputed exact/prefix indexes. Reference lookup slices the verse array.
 
 Native SwiftUI + AppKit. The notch uses `NSScreen.safeAreaInsets` and

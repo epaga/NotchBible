@@ -84,8 +84,12 @@ See the [full reference guide](docs/DEVELOPMENT.md#references) for more shorthan
 | `*love*` | Words containing love |
 | `book:gen created God` | Search only Genesis |
 | `in:nt love` | Search only the New Testament |
+| `note:love` | Search only notes in the current translation |
+| `note:"for God"` | Search for a phrase only within notes |
+| `note:*` | Show verses with notes; tabs show each translation's total note count |
 
-Search matches whole words unless you use `*`. The panel shows 100 matches per
+Search includes notes in the current translation and shows their linked verses.
+It matches whole words unless you use `*`. The panel shows 100 matches per
 page; use the arrows to browse. **Copy includes all matches**, even across pages.
 Click a result's chapter number to open that chapter, or its verse number to
 open that verse. See the [full search guide](docs/DEVELOPMENT.md#full-text-search)

@@ -1,5 +1,16 @@
 import Foundation
 
+/// Note text and the verse IDs it belongs to in the selected BibleStore.
+public struct VerseSearchNote: Sendable {
+    public let text: String
+    public let verseIDs: [Int]
+
+    public init(text: String, verseIDs: [Int]) {
+        self.text = text
+        self.verseIDs = verseIDs
+    }
+}
+
 /// Routes ordinary text to search while retaining reference suggestions,
 /// unfinished addresses, and useful errors for recognized references.
 public final class BibleLookupEngine: Sendable {
@@ -11,8 +22,8 @@ public final class BibleLookupEngine: Sendable {
         references = ReferenceParser(bible: bible)
     }
 
-    public func lookup(_ input: String) -> ReferenceLookup {
-        references.recognizesReference(input) ? references.lookup(input) : bible.search(input)
+    public func lookup(_ input: String, notes: [VerseSearchNote] = []) -> ReferenceLookup {
+        references.recognizesReference(input) ? references.lookup(input) : bible.search(input, notes: notes)
     }
 }
 
@@ -27,11 +38,37 @@ private enum SearchText {
             !wordCharacters.contains($0) && !(wildcards && $0 == "*")
         }.map(String.init)
     }
+
+    static func wildcard(_ pattern: String, matches word: String) -> Bool {
+        guard pattern.contains("*") else { return pattern == word }
+        let parts = pattern.split(separator: "*", omittingEmptySubsequences: false)
+        var cursor = word.startIndex
+        for (index, part) in parts.enumerated() where !part.isEmpty {
+            if index == 0 {
+                guard word.hasPrefix(part) else { return false }
+                cursor = word.index(cursor, offsetBy: part.count)
+            } else if index == parts.count - 1 {
+                return word[cursor...].hasSuffix(part)
+            } else {
+                guard let range = word.range(of: part, range: cursor..<word.endIndex) else { return false }
+                cursor = range.upperBound
+            }
+        }
+        return true
+    }
 }
 
 private struct SearchTerm {
     let words: [String]
     let excluded: Bool
+    let notesOnly: Bool
+
+    func matches(in tokens: [String]) -> Bool {
+        guard tokens.count >= words.count else { return false }
+        return (0...(tokens.count - words.count)).contains { start in
+            words.indices.allSatisfy { SearchText.wildcard(words[$0], matches: tokens[start + $0]) }
+        }
+    }
 }
 
 private struct SearchQuery {
@@ -114,14 +151,14 @@ private struct SearchQuery {
                 }
                 if excluded { excludedTestaments.insert(testament) }
                 else { testaments.insert(testament) }
-            case .some(let name):
-                error = "Unknown search filter “\(name):”. Use book: or in:."
-                return
-            case nil:
+            case nil, "note":
                 let words = SearchText.words(value, wildcards: true)
                 guard !words.isEmpty else { continue }
-                if quoted { terms.append(SearchTerm(words: words, excluded: excluded)) }
-                else { terms += words.map { SearchTerm(words: [$0], excluded: excluded) } }
+                if quoted { terms.append(SearchTerm(words: words, excluded: excluded, notesOnly: tag == "note")) }
+                else { terms += words.map { SearchTerm(words: [$0], excluded: excluded, notesOnly: tag == "note") } }
+            case .some(let name):
+                error = "Unknown search filter “\(name):”. Use book:, in:, or note:."
+                return
             }
         }
     }
@@ -184,7 +221,7 @@ struct VerseSearchIndex: Sendable {
         self.allVerses = allVerses
     }
 
-    func lookup(_ input: String, verses: [BibleVerse]) -> ReferenceLookup {
+    func lookup(_ input: String, verses: [BibleVerse], notes: [VerseSearchNote]) -> ReferenceLookup {
         let query = SearchQuery(input, bookIndex: bookIndex)
         var result = ReferenceLookup()
         result.isSearch = true
@@ -192,7 +229,17 @@ struct VerseSearchIndex: Sendable {
         result.hint = query.hint
         result.isIncomplete = query.isIncomplete
         guard query.error == nil, query.hasClauses else { return result }
-        var required = query.terms.filter { !$0.excluded }.map(self.matches)
+        let noteTokens = notes.map { note in
+            (words: SearchText.words(note.text), verseIDs: Set(note.verseIDs.filter {
+                verses.indices.contains($0) && !verses[$0].isOmitted
+            }).sorted())
+        }
+        func matchingVerses(_ term: SearchTerm) -> [Int] {
+            var lists = term.notesOnly ? [] : [self.matches(term)]
+            for note in noteTokens where term.matches(in: note.words) { lists.append(note.verseIDs) }
+            return Self.union(lists)
+        }
+        var required = query.terms.filter { !$0.excluded }.map(matchingVerses)
         if !query.books.isEmpty { required.append(Self.union(query.books.map { bookPostings[$0] })) }
         if !query.testaments.isEmpty { required.append(Self.union(query.testaments.map { testamentPostings[$0] })) }
         required.sort { $0.count < $1.count }
@@ -203,7 +250,7 @@ struct VerseSearchIndex: Sendable {
         }
         if !matches.isEmpty {
             for term in query.terms where term.excluded {
-                matches = Self.merge(matches, self.matches(term), subtract: true)
+                matches = Self.merge(matches, matchingVerses(term), subtract: true)
             }
             if !query.excludedBooks.isEmpty {
                 matches = Self.merge(matches, Self.union(query.excludedBooks.map { bookPostings[$0] }), subtract: true)
@@ -255,26 +302,9 @@ struct VerseSearchIndex: Sendable {
         var ids: [UInt32] = []
         for word in vocabulary[low...] {
             if !word.hasPrefix(prefix) { break }
-            if Self.wildcard(pattern, matches: word) { ids.append(wordIDs[word]!) }
+            if SearchText.wildcard(pattern, matches: word) { ids.append(wordIDs[word]!) }
         }
         return ids
-    }
-
-    private static func wildcard(_ pattern: String, matches word: String) -> Bool {
-        let parts = pattern.split(separator: "*", omittingEmptySubsequences: false)
-        var cursor = word.startIndex
-        for (index, part) in parts.enumerated() where !part.isEmpty {
-            if index == 0 {
-                guard word.hasPrefix(part) else { return false }
-                cursor = word.index(cursor, offsetBy: part.count)
-            } else if index == parts.count - 1 {
-                return word[cursor...].hasSuffix(part)
-            } else {
-                guard let range = word.range(of: part, range: cursor..<word.endIndex) else { return false }
-                cursor = range.upperBound
-            }
-        }
-        return true
     }
 
     private static func union(_ lists: [[Int]]) -> [Int] {

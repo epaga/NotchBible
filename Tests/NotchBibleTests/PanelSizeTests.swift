@@ -29,8 +29,7 @@ final class PanelSizeTests: XCTestCase {
                 model.query = query
                 XCTAssertEqual(model.panelHeight, size.height)
                 XCTAssertEqual(model.preferredPanelSize, size)
-                if model.isEmpty { XCTAssertEqual(model.bodyHeight, 0) }
-                else { XCTAssertEqual(model.bodyHeight + model.panelChromeHeight, size.height) }
+                XCTAssertEqual(model.bodyHeight + model.panelChromeHeight, size.height)
             }
             let nextLaunch = LookupModel(library: library, preferences: preferences)
             XCTAssertEqual(nextLaunch.preferredPanelSize, size)

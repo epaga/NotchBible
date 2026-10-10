@@ -119,7 +119,9 @@ public final class BibleStore: Identifiable, Sendable {
         self.searchIndex = VerseSearchIndex(verses: verses, books: books)
     }
 
-    public func search(_ input: String) -> ReferenceLookup { searchIndex.lookup(input, verses: verses) }
+    public func search(_ input: String, notes: [VerseSearchNote] = []) -> ReferenceLookup {
+        searchIndex.lookup(input, verses: verses, notes: notes)
+    }
 
     public func chapterCount(in book: BibleBook) -> Int { chapters[book.id].count }
     public func chapterRange(book: BibleBook, chapter: Int) -> Range<Int>? {

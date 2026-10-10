@@ -49,6 +49,7 @@ final class LookupModel: ObservableObject {
     }
     var bible: BibleStore { lookup.bible }
     var isEmpty: Bool { query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+    var isAllNotesSearch: Bool { query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == "note:*" }
     var hasPassages: Bool { !result.passages.isEmpty && result.error == nil && result.suggestions.isEmpty }
     // Keep native text layout bounded on each keystroke. Copy retains every hit.
     static let searchDisplayLimit = 100
@@ -71,8 +72,8 @@ final class LookupModel: ObservableObject {
     }
     var translationBarHeight: CGFloat { 36 }
     var bodyHeight: CGFloat {
-        if isEmpty { return 0 }
         if let resizedPanelHeight { return max(0, resizedPanelHeight - panelChromeHeight) }
+        if isEmpty { return min(260, availableBodyHeight) }
         if !result.suggestions.isEmpty { return min(CGFloat(result.suggestions.count) * 45 + 22, availableBodyHeight) }
         if result.error != nil { return min(110, availableBodyHeight) }
         guard hasPassages else { return min(150, availableBodyHeight) }
@@ -111,7 +112,7 @@ final class LookupModel: ObservableObject {
     }
     private func updateLookup() {
         visibleVerses = []
-        result = lookup.lookup(query)
+        result = lookup.lookup(query, notes: notes.compactMap { $0.searchNote(in: bible) })
         searchPage = 0
         selectedSuggestion = 0
         copied = false
@@ -132,7 +133,9 @@ final class LookupModel: ObservableObject {
 
     func saveNote(_ note: VerseNote) throws {
         try noteStore.save(note)
+        guard notes != noteStore.notes else { return }
         notes = noteStore.notes
+        if result.isSearch { updateLookup() }
     }
     func makeNote(translation: String, segments: [NoteSegment]) -> VerseNote {
         let style = preferences.string(forKey: "noteAnnotationStyle").flatMap(AnnotationStyle.init(rawValue:)) ?? .underline
@@ -149,6 +152,7 @@ final class LookupModel: ObservableObject {
         visibleVerses = verses
     }
     func noteCount(for translation: String) -> Int {
+        if isAllNotesSearch { return notes.filter { $0.translation == translation }.count }
         guard hasPassages, translation != selectedTranslation else { return 0 }
         return notes.filter { note in
             note.translation == translation && note.segments.contains { visibleVerses.contains($0.verse) }

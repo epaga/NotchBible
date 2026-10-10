@@ -132,6 +132,26 @@ final class VerseNoteTests: XCTestCase {
         XCTAssertTrue(store.notes.isEmpty)
     }
 
+    func testLoadingLegacyEmptyNotesFiltersThemAndTheNextSaveRemovesThemFromDisk() throws {
+        let directory = try directory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let url = directory.appendingPathComponent("Notes.json")
+        var kept = VerseNote(translation: "NET", segments: [], text: "Keep this note")
+        let empty = ["", " \t\r\n", "\u{00a0}\u{2003}\n"].map {
+            VerseNote(translation: "NET", segments: [], text: $0)
+        }
+        let original = try JSONEncoder().encode(empty + [kept])
+        try original.write(to: url)
+        let store = NoteStore(url: url)
+        XCTAssertEqual(store.notes, [kept])
+        XCTAssertEqual(try Data(contentsOf: url), original, "Loading alone must not rewrite the notes file")
+        kept.text += "\nUpdated"
+        try store.save(kept)
+        let saved = try JSONDecoder().decode([VerseNote].self, from: Data(contentsOf: url))
+        XCTAssertEqual(saved, [kept])
+        XCTAssertEqual(NoteStore(url: url).notes, [kept])
+    }
+
     func testSavingEmptyOrWhitespaceTextRemovesOnlyThatNoteAndPersistsRemoval() throws {
         let directory = try directory()
         defer { try? FileManager.default.removeItem(at: directory) }

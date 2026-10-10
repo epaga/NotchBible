@@ -23,6 +23,8 @@ struct LookupView: View {
                     else if model.hasPassages { passages }
                     else if let hint = model.result.hint { errorView(hint) }
                 }.frame(height: model.bodyHeight, alignment: .top)
+            } else {
+                syntaxHelp.frame(height: model.bodyHeight, alignment: .top)
             }
             translationTabs.frame(height: model.translationBarHeight)
         }
@@ -59,19 +61,49 @@ struct LookupView: View {
             .frame(maxWidth: .infinity, alignment: .leading).padding(25)
     }
 
+    private var syntaxHelp: some View {
+        ScrollView {
+            Grid(alignment: .leading, horizontalSpacing: 20, verticalSpacing: 9) {
+                helpExample("John 3:16", "A single verse")
+                helpExample("John 3:16-18", "A verse range")
+                helpExample("Psalm 23", "A whole chapter")
+                helpExample("Gen1:1;John3:16", "Multiple passages")
+                helpExample("created God", "Both words, in any order")
+                helpExample("\"for God\"", "An exact phrase")
+                helpExample("note:love", "Search only notes")
+                helpExample("note:\"for God\"", "An exact phrase in notes")
+                helpExample("note:*", "All notes; counts on translation tabs")
+                helpExample("love -world", "Exclude a word")
+                helpExample("love* / *love*", "Words starting with / containing love")
+                helpExample("book:gen love", "Search one book")
+                helpExample("in:nt love", "New Testament; in:ot for Old Testament")
+            }
+            .font(.system(size: 11)).foregroundStyle(Palette.muted)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 25).padding(.top, 12).padding(.bottom, 20)
+        }.scrollIndicators(.hidden)
+    }
+
+    private func helpExample(_ example: String, _ explanation: String) -> some View {
+        GridRow(alignment: .firstTextBaseline) {
+            Text(example).monospaced().fixedSize()
+            Text(explanation).fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
     private var translationTabs: some View {
         ScrollView(.horizontal) {
             HStack(spacing: 18) {
                 ForEach(model.library.translations) { bible in
                     let selected = bible.translation == model.selectedTranslation
+                    let count = model.noteCount(for: bible.translation)
                     Button { model.selectTranslation(bible.translation) } label: {
                         VStack(spacing: 5) {
                             HStack(spacing: 4) {
                                 Text(bible.translation)
                                     .font(.system(size: 10, weight: selected ? .medium : .regular))
                                     .foregroundStyle(selected ? Palette.ink : Palette.muted)
-                                let count = model.noteCount(for: bible.translation)
-                                if count > 0 {
+                                if count > 0 || model.isAllNotesSearch {
                                     Text("\(count)").font(.system(size: 9, weight: .semibold))
                                         .foregroundStyle(Palette.ink)
                                         .padding(.horizontal, 4).frame(minWidth: 14, minHeight: 14)
@@ -84,7 +116,7 @@ struct LookupView: View {
                     }.buttonStyle(.plain)
                         .help(bible.attribution ?? bible.translation)
                         .accessibilityLabel(bible.translation)
-                        .accessibilityValue(model.noteCount(for: bible.translation) > 0 ? "\(model.noteCount(for: bible.translation)) notes for visible verses" : "")
+                        .accessibilityValue(model.isAllNotesSearch ? "\(count) notes" : (count > 0 ? "\(count) notes for visible verses" : ""))
                         .accessibilityAddTraits(selected ? .isSelected : [])
                 }
             }.padding(.horizontal, 25)
