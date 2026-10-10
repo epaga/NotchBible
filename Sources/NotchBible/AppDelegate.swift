@@ -67,6 +67,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         observers.forEach(NotificationCenter.default.removeObserver)
         triggers.forEach { $0.orderOut(nil) }
     }
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        model.finishNoteEditing?() == false ? .terminateCancel : .terminateNow
+    }
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
         show(on: ScreenGeometry.underPointer(), focus: true)
         return false
@@ -88,6 +91,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
     private func hide() {
         guard isOpen else { return }
+        guard model.finishNoteEditing?() != false else { return }
         isOpen = false
         panel.orderOut(nil)
     }
@@ -152,7 +156,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
             return true
         }
-        if event.window == panel || triggers.contains(where: { $0 == event.window }) { return false }
+        if event.window == panel || event.window?.parent == panel || triggers.contains(where: { $0 == event.window }) { return false }
         if event.window == statusItem.button?.window { return false }
         if isOpen, !panel.frame.contains(point) { hide() }
         return false

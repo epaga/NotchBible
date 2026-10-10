@@ -23,8 +23,8 @@ struct LookupView: View {
                     else if model.hasPassages { passages }
                     else if let hint = model.result.hint { errorView(hint) }
                 }.frame(height: model.bodyHeight, alignment: .top)
-                translationTabs.frame(height: model.translationBarHeight)
             }
+            translationTabs.frame(height: model.translationBarHeight)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .padding(.top, model.notchWidth > 0 ? NotchLayout.topInset : 0)
@@ -66,15 +66,25 @@ struct LookupView: View {
                     let selected = bible.translation == model.selectedTranslation
                     Button { model.selectTranslation(bible.translation) } label: {
                         VStack(spacing: 5) {
-                            Text(bible.translation)
-                                .font(.system(size: 10, weight: selected ? .medium : .regular))
-                                .foregroundStyle(selected ? Palette.ink : Palette.muted)
+                            HStack(spacing: 4) {
+                                Text(bible.translation)
+                                    .font(.system(size: 10, weight: selected ? .medium : .regular))
+                                    .foregroundStyle(selected ? Palette.ink : Palette.muted)
+                                let count = model.noteCount(for: bible.translation)
+                                if count > 0 {
+                                    Text("\(count)").font(.system(size: 9, weight: .semibold))
+                                        .foregroundStyle(Palette.ink)
+                                        .padding(.horizontal, 4).frame(minWidth: 14, minHeight: 14)
+                                        .background(Palette.gold.opacity(0.25), in: Capsule())
+                                }
+                            }
                             Capsule().fill(selected ? Palette.ink.opacity(0.8) : .clear)
                                 .frame(height: 1)
                         }.padding(.vertical, 8).contentShape(Rectangle())
                     }.buttonStyle(.plain)
                         .help(bible.attribution ?? bible.translation)
                         .accessibilityLabel(bible.translation)
+                        .accessibilityValue(model.noteCount(for: bible.translation) > 0 ? "\(model.noteCount(for: bible.translation)) notes for visible verses" : "")
                         .accessibilityAddTraits(selected ? .isSelected : [])
                 }
             }.padding(.horizontal, 25)
@@ -132,7 +142,7 @@ struct LookupView: View {
                     .accessibilityLabel(model.copied ? "Verses copied" : (model.result.isSearch ? "Copy all matching verses" : "Copy passage"))
             }.padding(.horizontal, 25).padding(.top, 12).padding(.bottom, 11)
 
-            PassageTextView(bible: bible, passages: passages, showsReferences: model.result.isSearch) { reference in
+            PassageTextView(model: model, bible: bible, passages: passages, showsReferences: model.result.isSearch) { reference in
                 model.query = reference
                 model.focus()
             }

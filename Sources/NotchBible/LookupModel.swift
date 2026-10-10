@@ -7,11 +7,16 @@ final class LookupModel: ObservableObject {
     let library: BibleLibrary
     private let lookups: [String: BibleLookupEngine]
     private let preferences: UserDefaults
+    private let noteStore: NoteStore
+    @Published private(set) var notes: [VerseNote]
+    @Published private(set) var visibleVerses: Set<NoteVerse> = []
+    var finishNoteEditing: (() -> Bool)?
     @Published private(set) var selectedTranslation: String
     private var lookup: BibleLookupEngine { lookups[selectedTranslation]! }
     @Published var query = "" {
         didSet {
             guard query != oldValue else { return }
+            guard finishNoteEditing?() != false else { query = oldValue; return }
             updateLookup()
         }
     }
@@ -28,9 +33,11 @@ final class LookupModel: ObservableObject {
     var onDismiss: (() -> Void)?
     private var copyReset: Task<Void, Never>?
 
-    init(library: BibleLibrary, preferences: UserDefaults = .standard) {
+    init(library: BibleLibrary, preferences: UserDefaults = .standard, noteStore: NoteStore = NoteStore()) {
         self.library = library
         self.preferences = preferences
+        self.noteStore = noteStore
+        self.notes = noteStore.notes
         self.lookups = Dictionary(uniqueKeysWithValues: library.translations.map { ($0.translation, BibleLookupEngine(bible: $0)) })
         let saved = preferences.string(forKey: "selectedTranslation")
         self.selectedTranslation = saved.flatMap { library.bible(named: $0)?.translation } ?? library.defaultTranslation.translation
@@ -62,7 +69,7 @@ final class LookupModel: ObservableObject {
         let end = min(start + Self.searchDisplayLimit - 1, count)
         return summary + " · \(start)–\(end)"
     }
-    var translationBarHeight: CGFloat { isEmpty ? 0 : 36 }
+    var translationBarHeight: CGFloat { 36 }
     var bodyHeight: CGFloat {
         if isEmpty { return 0 }
         if let resizedPanelHeight { return max(0, resizedPanelHeight - panelChromeHeight) }
@@ -97,11 +104,13 @@ final class LookupModel: ObservableObject {
 
     func selectTranslation(_ name: String) {
         guard let bible = library.bible(named: name), bible.translation != selectedTranslation else { return }
+        guard finishNoteEditing?() != false else { return }
         selectedTranslation = bible.translation
         preferences.set(selectedTranslation, forKey: "selectedTranslation")
         updateLookup()
     }
     private func updateLookup() {
+        visibleVerses = []
         result = lookup.lookup(query)
         searchPage = 0
         selectedSuggestion = 0
@@ -111,10 +120,40 @@ final class LookupModel: ObservableObject {
     }
     func moveSearchPage(_ delta: Int) {
         guard searchPageCount > 1 else { return }
+        guard finishNoteEditing?() != false else { return }
+        visibleVerses = []
         searchPage = min(max(0, searchPage + delta), searchPageCount - 1)
         onLayoutChange?()
     }
-    func focus() { focusRequest += 1 }
+    func focus() {
+        guard finishNoteEditing?() != false else { return }
+        focusRequest += 1
+    }
+
+    func saveNote(_ note: VerseNote) throws {
+        try noteStore.save(note)
+        notes = noteStore.notes
+    }
+    func makeNote(translation: String, segments: [NoteSegment]) -> VerseNote {
+        let style = preferences.string(forKey: "noteAnnotationStyle").flatMap(AnnotationStyle.init(rawValue:)) ?? .underline
+        let color = preferences.integer(forKey: "noteAnnotationColor")
+        return VerseNote(translation: translation, segments: segments, style: style,
+                         color: AnnotationColors.values.indices.contains(color) ? color : 0)
+    }
+    func rememberAnnotation(_ note: VerseNote) {
+        preferences.set(note.style.rawValue, forKey: "noteAnnotationStyle")
+        preferences.set(note.color, forKey: "noteAnnotationColor")
+    }
+    func setVisibleVerses(_ verses: Set<NoteVerse>) {
+        guard visibleVerses != verses else { return }
+        visibleVerses = verses
+    }
+    func noteCount(for translation: String) -> Int {
+        guard hasPassages, translation != selectedTranslation else { return 0 }
+        return notes.filter { note in
+            note.translation == translation && note.segments.contains { visibleVerses.contains($0.verse) }
+        }.count
+    }
     func choose(_ suggestion: ReferenceSuggestion) {
         query = suggestion.query
         focus()

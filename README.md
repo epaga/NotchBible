@@ -28,6 +28,8 @@ You do not need Xcode or any developer tools to use the download.
   by book or testament. Results update as you type and stay in Bible order.
 - **Copy complete results:** copy an entire passage or every search match, including
   references and the translation name.
+- **Personal notes:** select verse text to add a note and choose from seven annotation
+  styles and ten colors. Notes are saved separately for each translation.
 - **Works with any Mac display:** use the notch, menu bar icon, or keyboard shortcut.
 - **A panel that fits:** it grows with the passage, can be resized, and remembers its size.
 - **Optional translations:** add your own text files to a [local folder](#add-your-own-translations)
@@ -42,6 +44,8 @@ No accounts, analytics, or network requests. Your lookups and searches stay on y
 | Open or close | Click the notch or menu bar book, or press **Control–Option–B** |
 | Look up or search | Type in the field; results update on each edit |
 | Copy a complete result | Click the copy icon, press **Return**, or press **Shift–Command–C** |
+| Add a note | Select verse text with the mouse |
+| Save a note | Click elsewhere or press **Command–Return**; **Return** adds a line break |
 | Dismiss | Press **Escape** or click outside the panel |
 | Add translation files | Right-click the menu bar book → **Open Translations Folder…** |
 | About or Quit | Right-click the menu bar book |
@@ -87,6 +91,26 @@ Click a result's chapter number to open that chapter, or its verse number to
 open that verse. See the [full search guide](docs/DEVELOPMENT.md#full-text-search)
 for more filters and combinations.
 
+### Notes and annotations
+
+Select text in a verse and release the mouse to open a note below your selection.
+Type freely, including line breaks. Under the text area, choose underline,
+dotted underline, box, oval, background highlight, or the bottom or
+top half of a box. Clicking a style reveals ten color choices. Click elsewhere
+or press **Command–Return** to save and close the note.
+Style and color changes appear immediately in the verse. New notes use your last
+chosen style and color, starting with a yellow underline before your first choice.
+To remove a note and its annotation, clear its text and save. Text containing
+only spaces or line breaks also counts as empty.
+
+Annotations follow the selected text across wrapped lines and verses. Click an
+annotation to reopen its note. Notes belong to the translation selected when
+you created them. Other translation tabs show a count of notes for verses
+currently visible in the passage; the count updates as you scroll.
+
+Notes stay on your Mac in `~/Library/Application Support/NotchBible/Notes.json`
+and survive app updates. Include this file in your backups.
+
 ## Add your own translations
 
 **The download includes NET only.** You can add other translations without rebuilding
@@ -116,7 +140,8 @@ To add a translation:
    NotchBible**. Enter a reference or search to see its tab below the results.
 
 Select a translation's tab below the results to switch editions. Switching keeps
-your current reference or search, and the app remembers your selection.
+your current reference or search and the top visible verse when it is available
+in the new results. The app remembers your selected translation.
 Each edition uses its own verse numbering. Copied passages identify the selected
 translation; NET copies also include its copyright acknowledgment.
 
