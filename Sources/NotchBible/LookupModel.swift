@@ -110,6 +110,33 @@ final class LookupModel: ObservableObject {
         preferences.set(selectedTranslation, forKey: "selectedTranslation")
         updateLookup()
     }
+    func moveTranslation(_ delta: Int) {
+        let translations = library.translations
+        guard translations.count > 1,
+              let index = translations.firstIndex(where: { $0.translation == selectedTranslation }) else { return }
+        let nextIndex = (index + delta + translations.count) % translations.count
+        selectTranslation(translations[nextIndex].translation)
+    }
+    @discardableResult
+    func moveChapter(_ delta: Int) -> Bool {
+        guard delta == -1 || delta == 1, result.canCopy, !result.isSearch,
+              result.suggestions.isEmpty, result.passages.count == 1,
+              let passage = result.passages.first else { return false }
+        let address = bible.verses[passage.range.lowerBound].address
+        guard passage.range == bible.chapterRange(book: bible.books[address.book], chapter: address.chapter) else { return false }
+        let offset = delta > 0 ? passage.range.upperBound : passage.range.lowerBound - 1
+        guard bible.verses.indices.contains(offset) else { return true }
+        guard finishNoteEditing?() != false else { return true }
+        let next = bible.verses[offset].address
+        let book = bible.books[next.book]
+        var reference = "\(book.name) \(next.chapter)"
+        // A bare number in a single-chapter book is parsed as a verse.
+        if book.isSingleChapter, let range = bible.chapterRange(book: book, chapter: next.chapter) {
+            reference += ":\(bible.verses[range.lowerBound].address.verse)-\(bible.verses[range.upperBound - 1].address.verse)"
+        }
+        query = reference
+        return true
+    }
     private func updateLookup() {
         visibleVerses = []
         result = lookup.lookup(query, notes: notes.compactMap { $0.searchNote(in: bible) })

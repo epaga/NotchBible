@@ -54,10 +54,7 @@ public final class BibleLibrary: Sendable {
         }
         self.loadingWarnings = warnings
         self.translations = translations.sorted {
-            let firstIsNET = $0.translation.uppercased() == "NET"
-            let secondIsNET = $1.translation.uppercased() == "NET"
-            if firstIsNET != secondIsNET { return firstIsNET }
-            return $0.translation.localizedStandardCompare($1.translation) == .orderedAscending
+            $0.translation.localizedStandardCompare($1.translation) == .orderedAscending
         }
     }
 

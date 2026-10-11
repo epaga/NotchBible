@@ -14,6 +14,8 @@ final class LookupPanel: NSPanel {
     var onCopy: (() -> Void)?
     var onFocus: (() -> Void)?
     var onDismiss: (() -> Void)?
+    var onMoveTranslation: ((Int) -> Void)?
+    var onMoveChapter: ((Int) -> Bool)?
     var onResize: ((NSSize) -> Void)?
     var onResizeEnd: (() -> Void)?
     init(model: LookupModel) {
@@ -40,6 +42,22 @@ final class LookupPanel: NSPanel {
     override func cancelOperation(_ sender: Any?) { onDismiss?() }
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
         let modifiers = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+        // Arrow keys can also carry .numericPad and .function flags.
+        if modifiers.intersection([.command, .option, .control, .shift]) == [.command, .option] {
+            switch event.keyCode {
+            case 123: onMoveTranslation?(-1); return true
+            case 124: onMoveTranslation?(1); return true
+            default: break
+            }
+        }
+        if modifiers.intersection([.command, .option, .control, .shift]) == .option,
+           (firstResponder as? NSTextView)?.isEditable != true {
+            switch event.keyCode {
+            case 123: if onMoveChapter?(-1) == true { return true }
+            case 124: if onMoveChapter?(1) == true { return true }
+            default: break
+            }
+        }
         if modifiers == [.command, .shift], event.charactersIgnoringModifiers?.lowercased() == "c" {
             onCopy?(); return true
         }

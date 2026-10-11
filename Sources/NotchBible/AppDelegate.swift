@@ -28,6 +28,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         panel.onDismiss = model.onDismiss
         panel.onCopy = { [weak self] in self?.model.copy() }
         panel.onFocus = { [weak self] in self?.model.focus() }
+        panel.onMoveTranslation = { [weak self] delta in self?.model.moveTranslation(delta) }
+        panel.onMoveChapter = { [weak self] delta in self?.model.moveChapter(delta) ?? false }
         panel.onResize = { [weak self] size in
             guard let self, let screen = self.activeScreen else { return }
             self.model.setPanelSize(self.clampedPanelSize(size, on: screen))

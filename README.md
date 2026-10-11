@@ -43,6 +43,8 @@ No accounts, analytics, or network requests. Your lookups and searches stay on y
 | --- | --- |
 | Open or close | Click the notch or menu bar book, or press **Control–Option–B** |
 | Look up or search | Type in the field; results update on each edit |
+| Previous or next translation | Press **Command–Option–←/→**; wraps at either end |
+| Previous or next chapter | Press **Option–←/→** while viewing one whole chapter and the search field isn’t active; crosses book boundaries |
 | Copy a complete result | Click the copy icon, press **Return**, or press **Shift–Command–C** |
 | Add a note | Select verse text with the mouse |
 | Save a note | Click elsewhere or press **Command–Return**; **Return** adds a line break |
