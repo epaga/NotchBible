@@ -16,6 +16,7 @@ final class LookupPanel: NSPanel {
     var onDismiss: (() -> Void)?
     var onMoveTranslation: ((Int) -> Void)?
     var onMoveChapter: ((Int) -> Bool)?
+    var onChangeFontSize: ((Int) -> Void)?
     var onResize: ((NSSize) -> Void)?
     var onResizeEnd: (() -> Void)?
     init(model: LookupModel) {
@@ -55,6 +56,16 @@ final class LookupPanel: NSPanel {
             switch event.keyCode {
             case 123: if onMoveChapter?(-1) == true { return true }
             case 124: if onMoveChapter?(1) == true { return true }
+            default: break
+            }
+        }
+        if modifiers.intersection([.command, .option, .control]) == .command {
+            // Match characters, not key codes, so plus and minus work on any
+            // keyboard layout (e.g. German has a dedicated + key).
+            switch event.charactersIgnoringModifiers {
+            case "+", "=": onChangeFontSize?(1); return true
+            case "-": onChangeFontSize?(-1); return true
+            case "0" where !modifiers.contains(.shift): onChangeFontSize?(0); return true
             default: break
             }
         }

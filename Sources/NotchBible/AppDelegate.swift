@@ -29,6 +29,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         panel.onCopy = { [weak self] in self?.model.copy() }
         panel.onFocus = { [weak self] in self?.model.focus() }
         panel.onMoveTranslation = { [weak self] delta in self?.model.moveTranslation(delta) }
+        panel.onChangeFontSize = { [weak self] step in
+            if step == 0 { self?.model.resetFontSize() } else { self?.model.changeFontSize(by: CGFloat(step) * 2) }
+        }
         panel.onMoveChapter = { [weak self] delta in self?.model.moveChapter(delta) ?? false }
         panel.onResize = { [weak self] size in
             guard let self, let screen = self.activeScreen else { return }
@@ -160,6 +163,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         if event.window == panel || event.window?.parent == panel || triggers.contains(where: { $0 == event.window }) { return false }
         if event.window == statusItem.button?.window { return false }
+        // Save, open and alert panels for flashcards sit outside the panel.
+        if NSApp.modalWindow != nil { return false }
         if isOpen, !panel.frame.contains(point) { hide() }
         return false
     }

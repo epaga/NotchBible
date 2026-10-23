@@ -12,11 +12,15 @@ final class LookupModel: ObservableObject {
     @Published private(set) var visibleVerses: Set<NoteVerse> = []
     var finishNoteEditing: (() -> Bool)?
     @Published private(set) var selectedTranslation: String
+    @Published private(set) var fontSize: CGFloat
+    static let defaultFontSize: CGFloat = 20
+    static let fontSizeRange: ClosedRange<CGFloat> = 12...40
     private var lookup: BibleLookupEngine { lookups[selectedTranslation]! }
     @Published var query = "" {
         didSet {
             guard query != oldValue else { return }
             guard finishNoteEditing?() != false else { query = oldValue; return }
+            if flashcardMode { setFlashcardMode(false) }
             updateLookup()
         }
     }
@@ -32,8 +36,14 @@ final class LookupModel: ObservableObject {
     var onLayoutChange: (() -> Void)?
     var onDismiss: (() -> Void)?
     private var copyReset: Task<Void, Never>?
+    let flashcards: FlashcardModel
+    @Published private(set) var flashcardMode = false
+    @Published private(set) var toast: String?
+    private var toastReset: Task<Void, Never>?
 
-    init(library: BibleLibrary, preferences: UserDefaults = .standard, noteStore: NoteStore = NoteStore()) {
+    init(library: BibleLibrary, preferences: UserDefaults = .standard, noteStore: NoteStore = NoteStore(),
+         flashcards: FlashcardModel? = nil) {
+        self.flashcards = flashcards ?? FlashcardModel()
         self.library = library
         self.preferences = preferences
         self.noteStore = noteStore
@@ -41,11 +51,20 @@ final class LookupModel: ObservableObject {
         self.lookups = Dictionary(uniqueKeysWithValues: library.translations.map { ($0.translation, BibleLookupEngine(bible: $0)) })
         let saved = preferences.string(forKey: "selectedTranslation")
         self.selectedTranslation = saved.flatMap { library.bible(named: $0)?.translation } ?? library.defaultTranslation.translation
+        let savedFontSize = CGFloat(preferences.double(forKey: "passageFontSize"))
+        self.fontSize = Self.fontSizeRange.contains(savedFontSize) ? savedFontSize : Self.defaultFontSize
         if let size = preferences.dictionary(forKey: "panelSize"),
            let width = size["width"] as? Double, let height = size["height"] as? Double,
            width.isFinite, height.isFinite, width > 0, height > 0 {
             self.preferredPanelSize = NSSize(width: width, height: height)
         }
+        self.flashcards.referenceMatches = { [weak self] answer, card in
+            guard let engine = self?.lookups[card.translation] ?? self?.lookups.values.first else { return false }
+            let found = engine.lookup(answer)
+            guard found.error == nil, found.suggestions.isEmpty, !found.isSearch, !found.passages.isEmpty else { return false }
+            return found.passages.map(\.reference).joined(separator: "; ") == card.reference
+        }
+        self.flashcards.onLayoutChange = { [weak self] in self?.onLayoutChange?() }
     }
     var bible: BibleStore { lookup.bible }
     var isEmpty: Bool { query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
@@ -70,26 +89,28 @@ final class LookupModel: ObservableObject {
         let end = min(start + Self.searchDisplayLimit - 1, count)
         return summary + " · \(start)–\(end)"
     }
-    var translationBarHeight: CGFloat { 36 }
+    var translationBarHeight: CGFloat { flashcardMode ? 0 : 36 }
     var bodyHeight: CGFloat {
         if let resizedPanelHeight { return max(0, resizedPanelHeight - panelChromeHeight) }
+        if flashcardMode { return min(340, availableBodyHeight) }
         if isEmpty { return min(260, availableBodyHeight) }
         if !result.suggestions.isEmpty { return min(CGFloat(result.suggestions.count) * 45 + 22, availableBodyHeight) }
         if result.error != nil { return min(110, availableBodyHeight) }
         guard hasPassages else { return min(150, availableBodyHeight) }
         var height: CGFloat = 94
         let passages = displayPassages
+        let scale = Double(fontScale)
         for passage in passages {
-            if result.isSearch || passages.count > 1 { height += 38 }
+            if result.isSearch || passages.count > 1 { height += 38 * fontScale }
             for verse in bible.verses[passage.range] {
-                height += CGFloat(max(1, Int(ceil(Double(verse.text.count) / 48)))) * 29 + 12
+                height += CGFloat(max(1, Int(ceil(Double(verse.text.count) * scale / 48)))) * 29 * fontScale + 12
                 if height >= availableBodyHeight { return availableBodyHeight }
             }
         }
         return min(max(130, height), availableBodyHeight)
     }
     var panelChromeHeight: CGFloat {
-        translationBarHeight + (isEmpty ? 88 : 89) + (notchWidth > 0 ? NotchLayout.topInset - 6 : 0)
+        translationBarHeight + (isEmpty || flashcardMode ? 88 : 89) + (notchWidth > 0 ? NotchLayout.topInset - 6 : 0)
     }
     var panelHeight: CGFloat { resizedPanelHeight ?? (bodyHeight + panelChromeHeight) }
 
@@ -101,6 +122,17 @@ final class LookupModel: ObservableObject {
         guard let preferredPanelSize else { return }
         preferences.set(["width": Double(preferredPanelSize.width), "height": Double(preferredPanelSize.height)],
                         forKey: "panelSize")
+    }
+
+    var fontScale: CGFloat { fontSize / Self.defaultFontSize }
+    func changeFontSize(by delta: CGFloat) { setFontSize(fontSize + delta) }
+    func resetFontSize() { setFontSize(Self.defaultFontSize) }
+    private func setFontSize(_ size: CGFloat) {
+        let clamped = min(max(size, Self.fontSizeRange.lowerBound), Self.fontSizeRange.upperBound)
+        guard clamped != fontSize else { return }
+        fontSize = clamped
+        preferences.set(Double(clamped), forKey: "passageFontSize")
+        onLayoutChange?()
     }
 
     func selectTranslation(_ name: String) {
@@ -197,6 +229,35 @@ final class LookupModel: ObservableObject {
         if !result.suggestions.isEmpty {
             choose(result.suggestions[min(selectedSuggestion, result.suggestions.count - 1)])
         } else { copy() }
+    }
+    func setFlashcardMode(_ on: Bool) {
+        guard on != flashcardMode else { return }
+        guard finishNoteEditing?() != false else { return }
+        flashcardMode = on
+        if !on { flashcards.endSession() }
+        onLayoutChange?()
+    }
+    var canAddFlashcard: Bool { result.canCopy && !result.isSearch && result.suggestions.isEmpty && hasPassages }
+    func addFlashcards() {
+        guard canAddFlashcard else { return }
+        var added: [String] = [], existing: [String] = []
+        for passage in result.passages {
+            let text = bible.verses[passage.range].filter { !$0.isOmitted }.map(\.text).joined(separator: " ")
+            let outcome = flashcards.add(reference: passage.reference, translation: selectedTranslation, text: text)
+            if outcome.existed { existing.append("\(passage.reference) is already in the \(outcome.pile.name)") }
+            else { added.append(passage.reference) }
+        }
+        showToast(added.isEmpty ? existing.joined(separator: " · ")
+                  : "Added \(added.joined(separator: "; ")) (\(selectedTranslation)) to the Stove")
+    }
+    private func showToast(_ message: String) {
+        toast = message
+        toastReset?.cancel()
+        toastReset = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(2.2))
+            guard !Task.isCancelled else { return }
+            self?.toast = nil
+        }
     }
     func copy() {
         guard result.canCopy && result.suggestions.isEmpty else { return }

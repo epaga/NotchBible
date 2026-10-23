@@ -54,16 +54,18 @@ struct PassageTextView: NSViewRepresentable {
 
     func updateNSView(_ scroll: NSScrollView, context: Context) {
         context.coordinator.onSelectReference = onSelectReference
-        let identity = bible.translation + ":\(showsReferences):" + passages.map(\.id).joined(separator: ";")
+        let identity = bible.translation + ":\(showsReferences):\(model.fontSize):" + passages.map(\.id).joined(separator: ";")
         guard let text = scroll.documentView as? NSTextView else { return }
         if identity != context.coordinator.identity {
             guard context.coordinator.finishEditing() else { return }
-            let anchor = context.coordinator.translation != bible.translation && context.coordinator.query == model.query
+            let restyled = context.coordinator.translation != bible.translation || context.coordinator.fontSize != model.fontSize
+            let anchor = restyled && context.coordinator.query == model.query
                 ? context.coordinator.topVisibleVerse() : nil
             context.coordinator.identity = identity
             let rendered = attributedPassages()
             context.coordinator.verses = rendered.verses
             context.coordinator.translation = bible.translation
+            context.coordinator.fontSize = model.fontSize
             context.coordinator.invalidateAnnotations()
             text.textStorage?.setAttributedString(rendered.text)
             text.setSelectedRange(NSRange(location: 0, length: 0))
@@ -90,6 +92,7 @@ struct PassageTextView: NSViewRepresentable {
     final class Coordinator: NSObject, NSTextViewDelegate {
         var identity = ""
         var translation = ""
+        var fontSize: CGFloat = 0
         var query = ""
         var verses: [DisplayedVerse] = []
         var onSelectReference: ((String) -> Void)?
@@ -312,33 +315,35 @@ struct PassageTextView: NSViewRepresentable {
         var displayed: [DisplayedVerse] = []
         let ink = NSColor(calibratedRed: 0.94, green: 0.92, blue: 0.87, alpha: 1)
         let muted = NSColor(calibratedRed: 0.56, green: 0.55, blue: 0.52, alpha: 1)
-        let serif = NSFont.systemFont(ofSize: 20)
-        let font = serif.fontDescriptor.withDesign(.serif).flatMap { NSFont(descriptor: $0, size: 20) } ?? serif
-        let omittedFont = NSFontManager.shared.convert(.systemFont(ofSize: 13), toHaveTrait: .italicFontMask)
+        let size = model.fontSize
+        let scale = model.fontScale
+        let serif = NSFont.systemFont(ofSize: size)
+        let font = serif.fontDescriptor.withDesign(.serif).flatMap { NSFont(descriptor: $0, size: size) } ?? serif
+        let omittedFont = NSFontManager.shared.convert(.systemFont(ofSize: 13 * scale), toHaveTrait: .italicFontMask)
         for passage in passages {
             if showsReferences || passages.count > 1 {
                 let style = NSMutableParagraphStyle()
                 style.paragraphSpacingBefore = 8
                 style.paragraphSpacing = 12
                 result.append(NSAttributedString(string: passage.reference + "\n", attributes: [
-                    .font: NSFont.systemFont(ofSize: 10, weight: .medium),
+                    .font: NSFont.systemFont(ofSize: 10 * scale, weight: .medium),
                     .foregroundColor: NSColor(calibratedRed: 0.88, green: 0.71, blue: 0.46, alpha: 1),
                     .paragraphStyle: style
                 ]))
             }
             let showChapter = showsReferences || passages.count > 1 ||
                 bible.verses[passage.range.lowerBound].address.chapter != bible.verses[passage.range.upperBound - 1].address.chapter
-            let labelWidth: CGFloat = showChapter ? 33 : 14
+            let labelWidth: CGFloat = (showChapter ? 33 : 14) * scale
             let style = NSMutableParagraphStyle()
-            style.headIndent = labelWidth + 11
+            style.headIndent = labelWidth + 11 * scale
             style.tabStops = [NSTextTab(textAlignment: .right, location: labelWidth),
                               NSTextTab(textAlignment: .left, location: style.headIndent)]
-            style.lineSpacing = 6
-            style.paragraphSpacing = 12
+            style.lineSpacing = 6 * scale
+            style.paragraphSpacing = 12 * scale
             for verse in bible.verses[passage.range] {
                 let number = showChapter ? "\(verse.address.chapter):\(verse.address.verse)" : "\(verse.address.verse)"
                 let label = NSMutableAttributedString(string: "\t" + number + "\t", attributes: [
-                    .font: NSFont.monospacedSystemFont(ofSize: 9, weight: .medium),
+                    .font: NSFont.monospacedSystemFont(ofSize: 9 * scale, weight: .medium),
                     .foregroundColor: muted.withAlphaComponent(0.8), .paragraphStyle: style
                 ])
                 if showsReferences {

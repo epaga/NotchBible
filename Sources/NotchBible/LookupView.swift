@@ -12,10 +12,24 @@ struct LookupView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            ReferenceField(model: model)
+            HStack(spacing: 10) {
+                ReferenceField(model: model)
+                Button { model.setFlashcardMode(!model.flashcardMode) } label: {
+                    Image(systemName: model.flashcardMode ? "rectangle.stack.fill" : "rectangle.stack")
+                        .font(.system(size: 15))
+                        .foregroundStyle(model.flashcardMode ? Palette.gold : Palette.muted)
+                        .frame(width: 30, height: 30).contentShape(Rectangle())
+                }.buttonStyle(.plain)
+                    .help(model.flashcardMode ? "Leave flashcard mode" : "Flashcards")
+                    .accessibilityLabel("Flashcard mode")
+                    .accessibilityAddTraits(model.flashcardMode ? .isSelected : [])
+            }
                 .frame(height: 30)
                 .padding(.horizontal, 25).padding(.vertical, 20)
-            if !model.isEmpty {
+            if model.flashcardMode {
+                Rectangle().fill(Color.white.opacity(0.075)).frame(height: 1).padding(.horizontal, 25)
+                FlashcardView(model: model.flashcards).frame(height: model.bodyHeight, alignment: .top)
+            } else if !model.isEmpty {
                 Rectangle().fill(Color.white.opacity(0.075)).frame(height: 1).padding(.horizontal, 25)
                 Group {
                     if let error = model.result.error { errorView(error) }
@@ -26,8 +40,18 @@ struct LookupView: View {
             } else {
                 syntaxHelp.frame(height: model.bodyHeight, alignment: .top)
             }
-            translationTabs.frame(height: model.translationBarHeight)
+            if !model.flashcardMode { translationTabs.frame(height: model.translationBarHeight) }
         }
+        .overlay(alignment: .bottom) {
+            if let toast = model.toast {
+                Text(toast).font(.system(size: 12, weight: .medium)).foregroundStyle(Palette.ink)
+                    .padding(.horizontal, 14).padding(.vertical, 8)
+                    .background(Color(white: 0.16), in: Capsule())
+                    .overlay(Capsule().stroke(Color.white.opacity(0.12)))
+                    .padding(.bottom, 48).transition(.opacity)
+            }
+        }
+        .animation(.easeOut(duration: 0.2), value: model.toast)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .padding(.top, model.notchWidth > 0 ? NotchLayout.topInset : 0)
         .background {
@@ -163,6 +187,15 @@ struct LookupView: View {
                     searchPageButton("chevron.left", delta: -1, disabled: model.searchPage == 0)
                     searchPageButton("chevron.right", delta: 1, disabled: model.searchPage + 1 == model.searchPageCount)
                 }
+                Button { model.addFlashcards() } label: {
+                    Image(systemName: "rectangle.stack.badge.plus")
+                        .font(.system(size: 13, weight: .regular))
+                        .foregroundStyle(Palette.muted)
+                        .frame(width: 28, height: 28).contentShape(Rectangle())
+                }.buttonStyle(.plain).disabled(!model.canAddFlashcard)
+                    .opacity(model.canAddFlashcard ? 1 : 0.35)
+                    .help("Add to flashcards (Stove)")
+                    .accessibilityLabel("Add passage to flashcards")
                 Button { model.copy() } label: {
                     Image(systemName: model.copied ? "checkmark" : "doc.on.doc")
                         .font(.system(size: 13, weight: .regular))
