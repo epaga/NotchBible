@@ -30,6 +30,8 @@ You do not need Xcode or any developer tools to use the download.
   references and the translation name.
 - **Personal notes:** select verse text to add a note and choose from seven annotation
   styles and ten colors. Notes are saved separately for each translation.
+- **Flashcards for memorizing:** add passages to a stove, fridge, and freezer pile, test
+  yourself by typing the verse or the reference, and print piles as index cards.
 - **Works with any Mac display:** use the notch, menu bar icon, or keyboard shortcut.
 - **A panel that fits:** it grows with the passage, can be resized, and remembers its size.
 - **Optional translations:** add your own text files to a [local folder](#add-your-own-translations)
@@ -48,6 +50,8 @@ No accounts, analytics, or network requests. Your lookups and searches stay on y
 | Copy a complete result | Click the copy icon, press **Return**, or press **Shift–Command–C** |
 | Add a note | Select verse text with the mouse |
 | Save a note | Click elsewhere or press **Command–Return**; **Return** adds a line break |
+| Add a passage to flashcards | Click the stack icon next to the copy icon |
+| Flashcard mode on or off | Click the stack icon to the right of the search field |
 | Dismiss | Press **Escape** or click outside the panel |
 | Add translation files | Right-click the menu bar book → **Open Translations Folder…** |
 | About or Quit | Right-click the menu bar book |
@@ -116,6 +120,48 @@ currently visible in the passage; the count updates as you scroll.
 
 Notes stay on your Mac in `~/Library/Application Support/NotchBible/Notes.json`
 and survive app updates. Include this file in your backups.
+
+### Flashcards
+
+While reading, click the stack icon next to the copy icon to add the passage to
+the **Stove** in the translation you're viewing. A short message confirms it.
+If the result shows several passages, each becomes its own card.
+
+Click the stack icon to the right of the search field to open flashcard mode.
+Typing in the search field closes it again. You'll see three piles, each meant to
+be worked through within its own time window:
+
+| Pile | Go through it every |
+| --- | --- |
+| Stove | 48 hours |
+| Fridge | 7 days |
+| Freezer | 30 days |
+
+Under each pile you can see when you last went through all of it; this turns red
+when the pile is overdue. Click a pile to start. Cards you haven't checked this
+round come first, least recently checked first. Once you've checked every card,
+the round counts as complete and the next one starts with the whole pile.
+
+Choose a test mode below the piles:
+
+- **Type the verse:** the reference is shown.
+- **Type the reference:** the verse is shown. Any reference that finds the same
+  passage counts, so `jn 3:16` matches John 3:16.
+- **Mixed:** each card randomly shows one or the other.
+
+Answers are checked without regard to case or punctuation. An exact answer is
+correct. If at least 90% of the characters match, you see both answers and
+decide whether it counts. **I don't know** shows the answer. A missed or unknown
+card always goes back to the Stove. After a correct answer, you can move the card
+up to the Fridge or Freezer, or keep it where it is.
+
+**Print** under a pile saves it as a PDF of 5 × 3 inch index cards: the reference
+on one page and the verse on the next, so double-sided printing puts them back
+to back. **Export** saves all piles, with their progress, or a single pile as a
+flashcard set. **Import** loads a set and asks whether to **Merge** it (adding
+only cards you don't have yet) or **Replace** your current cards and progress.
+
+Flashcards stay on your Mac in `~/Library/Application Support/NotchBible/Flashcards.json`.
 
 ## Add your own translations
 
