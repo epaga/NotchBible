@@ -16,6 +16,7 @@ final class LookupPanel: NSPanel {
     var onDismiss: (() -> Void)?
     var onMoveTranslation: ((Int) -> Void)?
     var onMoveChapter: ((Int) -> Bool)?
+    var onMoveHistory: ((Int) -> Void)?
     var onChangeFontSize: ((Int) -> Void)?
     var onResize: ((NSSize) -> Void)?
     var onResizeEnd: (() -> Void)?
@@ -66,6 +67,8 @@ final class LookupPanel: NSPanel {
             case "+", "=": onChangeFontSize?(1); return true
             case "-": onChangeFontSize?(-1); return true
             case "0" where !modifiers.contains(.shift): onChangeFontSize?(0); return true
+            case "[": onMoveHistory?(-1); return true
+            case "]": onMoveHistory?(1); return true
             default: break
             }
         }

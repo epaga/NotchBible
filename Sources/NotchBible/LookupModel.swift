@@ -40,6 +40,13 @@ final class LookupModel: ObservableObject {
     @Published private(set) var flashcardMode = false
     @Published private(set) var toast: String?
     private var toastReset: Task<Void, Never>?
+    @Published private(set) var history: ReadingHistory
+    // Position of the shown text after Back/Forward, which must not reorder the history.
+    @Published private(set) var historyIndex: Int?
+    var historyDelay: Duration = .seconds(5)
+    var isPanelVisible = true { didSet { scheduleHistory() } }
+    private var historyCandidate: HistoryEntry?
+    private var historyTask: Task<Void, Never>?
 
     init(library: BibleLibrary, preferences: UserDefaults = .standard, noteStore: NoteStore = NoteStore(),
          flashcards: FlashcardModel? = nil) {
@@ -48,6 +55,7 @@ final class LookupModel: ObservableObject {
         self.preferences = preferences
         self.noteStore = noteStore
         self.notes = noteStore.notes
+        self.history = ReadingHistory(stored: preferences.array(forKey: "readingHistory"))
         self.lookups = Dictionary(uniqueKeysWithValues: library.translations.map { ($0.translation, BibleLookupEngine(bible: $0)) })
         let saved = preferences.string(forKey: "selectedTranslation")
         self.selectedTranslation = saved.flatMap { library.bible(named: $0)?.translation } ?? library.defaultTranslation.translation
@@ -176,6 +184,7 @@ final class LookupModel: ObservableObject {
         selectedSuggestion = 0
         copied = false
         copyReset?.cancel()
+        scheduleHistory()
         onLayoutChange?()
     }
     func moveSearchPage(_ delta: Int) {
@@ -235,6 +244,7 @@ final class LookupModel: ObservableObject {
         guard finishNoteEditing?() != false else { return }
         flashcardMode = on
         if !on { flashcards.endSession() }
+        scheduleHistory()
         onLayoutChange?()
     }
     var canAddFlashcard: Bool { result.canCopy && !result.isSearch && result.suggestions.isEmpty && hasPassages }
@@ -249,6 +259,62 @@ final class LookupModel: ObservableObject {
         }
         showToast(added.isEmpty ? existing.joined(separator: " · ")
                   : "Added \(added.joined(separator: "; ")) (\(selectedTranslation)) to the Stove")
+    }
+    var shownHistoryEntry: HistoryEntry? {
+        guard !flashcardMode, hasPassages, !result.isSearch else { return nil }
+        return HistoryEntry(reference: result.passages.map(\.reference).joined(separator: "; "),
+                            translation: selectedTranslation, date: Date())
+    }
+    private func historyEntryIsShown(_ index: Int) -> Bool {
+        guard history.entries.indices.contains(index), let shown = shownHistoryEntry else { return false }
+        return history.entries[index].matches(shown)
+    }
+    var historyBackIndex: Int? {
+        let index = historyIndex.map { historyEntryIsShown($0) ? $0 + 1 : $0 } ?? (historyEntryIsShown(0) ? 1 : 0)
+        return history.entries.indices.contains(index) ? index : nil
+    }
+    var historyForwardIndex: Int? {
+        guard let historyIndex, historyIndex > 0, historyEntryIsShown(historyIndex) else { return nil }
+        return historyIndex - 1
+    }
+    func moveHistory(_ delta: Int) {
+        guard let index = delta < 0 ? historyBackIndex : historyForwardIndex else { return }
+        showHistoryEntry(at: index, reorder: false)
+    }
+    /// Opening an entry from the history list counts as a new visit once it settles.
+    func showHistoryEntry(at index: Int, reorder: Bool = true) {
+        guard history.entries.indices.contains(index), finishNoteEditing?() != false else { return }
+        let entry = history.entries[index]
+        historyIndex = reorder ? nil : index
+        setFlashcardMode(false)
+        var changed = false
+        if let bible = library.bible(named: entry.translation), bible.translation != selectedTranslation {
+            selectedTranslation = bible.translation
+            preferences.set(selectedTranslation, forKey: "selectedTranslation")
+            changed = true
+        }
+        if query != entry.reference { query = entry.reference }
+        else if changed { updateLookup() }
+        else { scheduleHistory() }
+    }
+    private func scheduleHistory() {
+        let shown = isPanelVisible ? shownHistoryEntry : nil
+        if let shown, let historyCandidate, historyCandidate.matches(shown), historyTask != nil { return }
+        historyTask?.cancel()
+        historyTask = nil
+        historyCandidate = nil
+        guard let shown, !(historyIndex.map(historyEntryIsShown) ?? false) else { return }
+        historyCandidate = shown
+        historyTask = Task { [weak self, historyDelay] in
+            try? await Task.sleep(for: historyDelay)
+            guard !Task.isCancelled, let self else { return }
+            self.historyTask = nil
+            self.historyCandidate = nil
+            guard let current = self.shownHistoryEntry, current.matches(shown) else { return }
+            self.history.record(current)
+            self.historyIndex = nil
+            self.preferences.set(self.history.stored, forKey: "readingHistory")
+        }
     }
     private func showToast(_ message: String) {
         toast = message

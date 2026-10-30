@@ -33,6 +33,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             if step == 0 { self?.model.resetFontSize() } else { self?.model.changeFontSize(by: CGFloat(step) * 2) }
         }
         panel.onMoveChapter = { [weak self] delta in self?.model.moveChapter(delta) ?? false }
+        panel.onMoveHistory = { [weak self] delta in self?.model.moveHistory(delta) }
         panel.onResize = { [weak self] size in
             guard let self, let screen = self.activeScreen else { return }
             self.model.setPanelSize(self.clampedPanelSize(size, on: screen))
@@ -87,6 +88,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         guard let screen else { return }
         activeScreen = screen
         isOpen = true
+        model.isPanelVisible = true
         resize()
         panel.alphaValue = 1
         if focus {
@@ -98,6 +100,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         guard isOpen else { return }
         guard model.finishNoteEditing?() != false else { return }
         isOpen = false
+        model.isPanelVisible = false
         panel.orderOut(nil)
     }
     private func resize() {

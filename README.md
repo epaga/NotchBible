@@ -32,6 +32,8 @@ You do not need Xcode or any developer tools to use the download.
   styles and ten colors. Notes are saved separately for each translation.
 - **Flashcards for memorizing:** add passages to a stove, fridge, and freezer pile, test
   yourself by typing the verse or the reference, and print piles as index cards.
+- **Reading history:** go back and forward through recent passages, or pick one of the
+  last 50 from the history list.
 - **Works with any Mac display:** use the notch, menu bar icon, or keyboard shortcut.
 - **A panel that fits:** it grows with the passage, can be resized, and remembers its size.
 - **Optional translations:** add your own text files to a [local folder](#add-your-own-translations)
@@ -47,6 +49,8 @@ No accounts, analytics, or network requests. Your lookups and searches stay on y
 | Look up or search | Type in the field; results update on each edit |
 | Previous or next translation | Press **Command–Option–←/→**; wraps at either end |
 | Previous or next chapter | Press **Option–←/→** while viewing one whole chapter and the search field isn’t active; crosses book boundaries |
+| Back or forward in history | Click **‹** or **›** next to the search field, or press **Command–[** / **Command–]** |
+| Open a recent passage | Click the clock icon next to the search field |
 | Copy a complete result | Click the copy icon, press **Return**, or press **Shift–Command–C** |
 | Add a note | Select verse text with the mouse |
 | Save a note | Click elsewhere or press **Command–Return**; **Return** adds a line break |
@@ -100,6 +104,14 @@ page; use the arrows to browse. **Copy includes all matches**, even across pages
 Click a result's chapter number to open that chapter, or its verse number to
 open that verse. See the [full search guide](docs/DEVELOPMENT.md#full-text-search)
 for more filters and combinations.
+
+### History
+
+A passage enters the history once it has been on screen for five seconds, along
+with the translation it was shown in. Searches aren't recorded. Viewing a passage
+again in the same translation moves it to the top instead of adding a duplicate.
+The clock icon lists the last 50 entries with the date each was viewed; choose one
+to open it. **‹** and **›** step through the history without reordering it.
 
 ### Notes and annotations
 

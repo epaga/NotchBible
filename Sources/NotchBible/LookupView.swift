@@ -14,6 +14,7 @@ struct LookupView: View {
         VStack(spacing: 0) {
             HStack(spacing: 10) {
                 ReferenceField(model: model)
+                historyButtons
                 Button { model.setFlashcardMode(!model.flashcardMode) } label: {
                     Image(systemName: model.flashcardMode ? "rectangle.stack.fill" : "rectangle.stack")
                         .font(.system(size: 15))
@@ -77,6 +78,35 @@ struct LookupView: View {
                 .padding(.trailing, 16).padding(.bottom, 16)
         }
         .preferredColorScheme(.dark)
+    }
+
+    private var historyButtons: some View {
+        HStack(spacing: 10) {
+            HStack(spacing: 0) {
+                historyArrow("chevron.left", label: "Back", enabled: model.historyBackIndex != nil) { model.moveHistory(-1) }
+                Rectangle().fill(Color.white.opacity(0.14)).frame(width: 1, height: 16)
+                historyArrow("chevron.right", label: "Forward", enabled: model.historyForwardIndex != nil) { model.moveHistory(1) }
+            }
+            .overlay(RoundedRectangle(cornerRadius: 7).stroke(Color.white.opacity(0.14)))
+            GeometryReader { geometry in
+                Button { HistoryMenu.show(for: model, below: geometry.frame(in: .global)) } label: {
+                    Image(systemName: "clock.arrow.trianglehead.counterclockwise.rotate.90")
+                        .font(.system(size: 14))
+                        .foregroundStyle(Palette.muted)
+                        .frame(width: 30, height: 30).contentShape(Rectangle())
+                }.buttonStyle(.plain).disabled(model.history.entries.isEmpty)
+                    .accessibilityLabel("History")
+            }.frame(width: 30, height: 30)
+        }
+    }
+
+    private func historyArrow(_ symbol: String, label: String, enabled: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: symbol)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(Palette.muted.opacity(enabled ? 1 : 0.4))
+                .frame(width: 26, height: 26).contentShape(Rectangle())
+        }.buttonStyle(.plain).disabled(!enabled).accessibilityLabel(label)
     }
 
     private func errorView(_ error: String) -> some View {
@@ -274,4 +304,44 @@ private struct NotchSurface: Shape {
         if !outline { path.closeSubpath() }
         return path
     }
+}
+
+@MainActor
+private final class HistoryMenu: NSObject {
+    private static var current: HistoryMenu?
+    private let model: LookupModel
+
+    private init(model: LookupModel) { self.model = model }
+
+    static func show(for model: LookupModel, below frame: CGRect) {
+        guard let host = NSApp.windows.first(where: { $0 is LookupPanel })?.contentView else { return }
+        let target = HistoryMenu(model: model)
+        current = target
+        let menu = NSMenu()
+        menu.appearance = NSAppearance(named: .darkAqua)
+        let paragraph = NSMutableParagraphStyle()
+        paragraph.lineSpacing = 1
+        for (index, entry) in model.history.entries.enumerated() {
+            let title = NSMutableAttributedString(string: "\(entry.reference)  ", attributes: [
+                .font: NSFont.systemFont(ofSize: 13), .paragraphStyle: paragraph
+            ])
+            title.append(NSAttributedString(string: entry.translation, attributes: [
+                .font: NSFont.systemFont(ofSize: 11, weight: .medium), .foregroundColor: NSColor.secondaryLabelColor
+            ]))
+            title.append(NSAttributedString(string: "\n" + entry.date.formatted(date: .abbreviated, time: .shortened), attributes: [
+                .font: NSFont.systemFont(ofSize: 10), .foregroundColor: NSColor.secondaryLabelColor, .paragraphStyle: paragraph
+            ]))
+            let item = NSMenuItem(title: entry.reference, action: #selector(choose(_:)), keyEquivalent: "")
+            item.attributedTitle = title
+            item.target = target
+            item.tag = index
+            if model.shownHistoryEntry.map(entry.matches) == true { item.state = .on }
+            menu.addItem(item)
+        }
+        let flipped = host.isFlipped
+        let point = NSPoint(x: frame.minX, y: flipped ? frame.maxY + 4 : host.bounds.height - frame.maxY - 4)
+        menu.popUp(positioning: nil, at: point, in: host)
+    }
+
+    @objc private func choose(_ item: NSMenuItem) { model.showHistoryEntry(at: item.tag) }
 }
