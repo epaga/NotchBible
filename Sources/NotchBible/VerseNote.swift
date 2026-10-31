@@ -3,6 +3,8 @@ import Foundation
 
 enum AnnotationStyle: String, Codable, CaseIterable {
     case underline, dottedUnderline, box, oval, highlight, bottomBox, topBox
+    /// Not a drawn style: choosing it removes the annotation.
+    case delete
 
     var name: String {
         switch self {
@@ -13,6 +15,7 @@ enum AnnotationStyle: String, Codable, CaseIterable {
         case .highlight: return "Background highlight"
         case .bottomBox: return "Bottom half of a box"
         case .topBox: return "Top half of a box"
+        case .delete: return "Remove annotation"
         }
     }
 }
@@ -80,7 +83,6 @@ final class NoteStore {
         guard FileManager.default.fileExists(atPath: url.path) else { return }
         do {
             notes = try JSONDecoder().decode([VerseNote].self, from: Data(contentsOf: url))
-                .filter { !$0.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
         } catch { loadError = error }
     }
 
@@ -88,10 +90,17 @@ final class NoteStore {
         // Preserve an unreadable existing file instead of overwriting it.
         if let loadError { throw loadError }
         var updated = notes
-        if note.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            updated.removeAll { $0.id == note.id }
-        } else if let index = updated.firstIndex(where: { $0.id == note.id }) { updated[index] = note }
+        if let index = updated.firstIndex(where: { $0.id == note.id }) { updated[index] = note }
         else { updated.append(note) }
+        try write(updated)
+    }
+
+    func remove(_ note: VerseNote) throws {
+        if let loadError { throw loadError }
+        try write(notes.filter { $0.id != note.id })
+    }
+
+    private func write(_ updated: [VerseNote]) throws {
         guard updated != notes else { return }
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]

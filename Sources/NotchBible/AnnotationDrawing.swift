@@ -17,6 +17,23 @@ enum AnnotationColors {
     static func color(_ index: Int) -> NSColor { values[values.indices.contains(index) ? index : 0] }
 }
 
+struct AnnotationChoice: Equatable {
+    let style: AnnotationStyle
+    let color: Int
+
+    var stored: String { "\(style.rawValue):\(color)" }
+    init(style: AnnotationStyle, color: Int) {
+        self.style = style
+        self.color = color
+    }
+    init?(_ stored: String) {
+        let parts = stored.split(separator: ":")
+        guard parts.count == 2, let style = AnnotationStyle(rawValue: String(parts[0])), style != .delete,
+              let color = Int(parts[1]), AnnotationColors.values.indices.contains(color) else { return nil }
+        self.init(style: style, color: color)
+    }
+}
+
 enum AnnotationDrawing {
     /// Each wrapped line gets its own fitted slice, including the short first
     /// and last lines. No shape crosses paragraph spacing or verse labels.
@@ -45,13 +62,23 @@ enum AnnotationDrawing {
             path.line(to: NSPoint(x: rect.minX, y: edge))
             path.line(to: NSPoint(x: rect.maxX, y: edge))
             path.line(to: NSPoint(x: rect.maxX, y: rect.midY))
-        case .highlight: break
+        case .highlight, .delete: break
         }
         path.stroke()
     }
 
     static func icon(_ style: AnnotationStyle, color: NSColor) -> NSImage {
         NSImage(size: NSSize(width: 32, height: 28), flipped: true) { _ in
+            if style == .delete {
+                NSColor.white.withAlphaComponent(0.85).setStroke()
+                let cross = NSBezierPath()
+                cross.lineWidth = 2
+                cross.lineCapStyle = .round
+                cross.move(to: NSPoint(x: 10, y: 8)); cross.line(to: NSPoint(x: 22, y: 20))
+                cross.move(to: NSPoint(x: 22, y: 8)); cross.line(to: NSPoint(x: 10, y: 20))
+                cross.stroke()
+                return true
+            }
             let rect = NSRect(x: 5, y: 3, width: 22, height: 21)
             if style == .highlight { draw(style, in: rect, color: color) }
             ("A" as NSString).draw(at: NSPoint(x: 9, y: 1), withAttributes: [

@@ -250,17 +250,20 @@ struct PassageTextView: NSViewRepresentable {
             guard let lastRect = layout.slices(for: annotation, in: container).last else { return }
             let viewRect = lastRect.offsetBy(dx: text.textContainerOrigin.x, dy: text.textContainerOrigin.y)
             let anchor = parent.convertToScreen(text.convert(viewRect, to: nil))
-            let editor = NoteEditorPanel(note: note, onAnnotationChange: { [weak self] note in
+            let history = model?.annotationHistory ?? []
+            let editor = NoteEditorPanel(note: note, isExisting: existing != nil, history: history,
+                                         onAnnotationChange: { [weak self] note in
                 self?.previewAnnotation(note)
-            }) { [weak self] note in self?.save(note) ?? false }
+            }, onRemove: { [weak self] note in self?.save(note, remove: true) ?? false }) { [weak self] note in
+                self?.save(note, remove: false) ?? false
+            }
             self.editor = editor
             let screen = parent.screen ?? NSScreen.main
             let available = screen?.visibleFrame ?? parent.frame
             let x = min(max(anchor.midX - 161, available.minX + 8), available.maxX - 330)
-            // Reserve space for the color row too, so choosing a style keeps the
-            // editor on screen. Prefer directly below the selected final line.
-            let y = max(available.minY + 40, anchor.minY - 6 - 158)
-            editor.setFrame(NSRect(x: x, y: y, width: 322, height: 158), display: false)
+            // Prefer directly below the selected final line.
+            let y = max(available.minY + 40, anchor.minY - 6 - NoteEditorPanel.height(history: history.count))
+            editor.setFrame(NSRect(x: x, y: y, width: 322, height: NoteEditorPanel.height(history: history.count)), display: false)
             parent.addChildWindow(editor, ordered: .above)
             editor.makeKeyAndOrderFront(nil)
             editor.makeFirstResponder(editor.editor.text)
@@ -276,11 +279,17 @@ struct PassageTextView: NSViewRepresentable {
         @discardableResult
         func finishEditing() -> Bool { isSaving ? true : (editor?.editor.save() ?? true) }
 
-        private func save(_ note: VerseNote) -> Bool {
+        private func save(_ note: VerseNote, remove: Bool) -> Bool {
             guard !isSaving else { return true }
             isSaving = true
             defer { isSaving = false }
-            do { try model?.saveNote(note) }
+            do {
+                if remove { try model?.removeNote(note) }
+                else {
+                    try model?.saveNote(note)
+                    model?.recordAnnotationChoice(note)
+                }
+            }
             catch {
                 let alert = NSAlert(error: error)
                 alert.messageText = "Your note couldn’t be saved"

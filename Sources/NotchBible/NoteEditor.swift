@@ -4,9 +4,14 @@ import AppKit
 final class NoteEditorPanel: NSPanel {
     let editor: NoteEditorViewController
 
-    init(note: VerseNote, onAnnotationChange: @escaping (VerseNote) -> Void, onSave: @escaping (VerseNote) -> Bool) {
-        editor = NoteEditorViewController(note: note, onAnnotationChange: onAnnotationChange, onSave: onSave)
-        super.init(contentRect: NSRect(x: 0, y: 0, width: 322, height: 158),
+    static func height(history: Int) -> CGFloat { history > 0 ? 226 : 190 }
+
+    init(note: VerseNote, isExisting: Bool = true, history: [AnnotationChoice] = [],
+         onAnnotationChange: @escaping (VerseNote) -> Void, onRemove: ((VerseNote) -> Bool)? = nil,
+         onSave: @escaping (VerseNote) -> Bool) {
+        editor = NoteEditorViewController(note: note, isExisting: isExisting, history: history,
+                                          onAnnotationChange: onAnnotationChange, onRemove: onRemove, onSave: onSave)
+        super.init(contentRect: NSRect(x: 0, y: 0, width: 322, height: NoteEditorPanel.height(history: history.count)),
                    styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
         title = "Note"
         isOpaque = false
@@ -17,11 +22,6 @@ final class NoteEditorPanel: NSPanel {
         level = .popUpMenu
         collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         contentViewController = editor
-        editor.onResize = { [weak self] height in
-            guard let self else { return }
-            let top = self.frame.maxY
-            self.setFrame(NSRect(x: self.frame.minX, y: top - height, width: 322, height: height), display: true)
-        }
     }
     override var canBecomeKey: Bool { true }
     override var canBecomeMain: Bool { false }
@@ -40,16 +40,24 @@ final class NoteEditorPanel: NSPanel {
 final class NoteEditorViewController: NSViewController {
     private var note: VerseNote
     private let onAnnotationChange: (VerseNote) -> Void
+    private let onRemove: ((VerseNote) -> Bool)?
     private let onSave: (VerseNote) -> Bool
-    var onResize: ((CGFloat) -> Void)?
+    private let isExisting: Bool
+    private let history: [AnnotationChoice]
+    private var touched = false
     let text = NSTextView()
     private var styleButtons: [NSButton] = []
     private var colorButtons: [NSButton] = []
     private let colors = NSStackView()
 
-    init(note: VerseNote, onAnnotationChange: @escaping (VerseNote) -> Void, onSave: @escaping (VerseNote) -> Bool) {
+    init(note: VerseNote, isExisting: Bool = true, history: [AnnotationChoice] = [],
+         onAnnotationChange: @escaping (VerseNote) -> Void, onRemove: ((VerseNote) -> Bool)? = nil,
+         onSave: @escaping (VerseNote) -> Bool) {
         self.note = note
+        self.isExisting = isExisting
+        self.history = history
         self.onAnnotationChange = onAnnotationChange
+        self.onRemove = onRemove
         self.onSave = onSave
         super.init(nibName: nil, bundle: nil)
     }
@@ -107,7 +115,6 @@ final class NoteEditorViewController: NSViewController {
         colors.orientation = .horizontal
         colors.distribution = .fillEqually
         colors.spacing = 6
-        colors.isHidden = true
         for index in AnnotationColors.values.indices {
             let button = NSButton(image: NSImage(), target: self, action: #selector(selectColor(_:)))
             button.tag = index
@@ -119,7 +126,25 @@ final class NoteEditorViewController: NSViewController {
             colors.addArrangedSubview(button)
         }
 
-        let stack = NSStackView(views: [scroll, styles, colors])
+        let recent = NSStackView()
+        recent.orientation = .horizontal
+        recent.distribution = .fillEqually
+        recent.spacing = 4
+        for (index, choice) in history.prefix(8).enumerated() {
+            let button = NSButton(image: AnnotationDrawing.icon(choice.style, color: AnnotationColors.color(choice.color)),
+                                  target: self, action: #selector(selectRecent(_:)))
+            button.tag = index
+            button.isBordered = false
+            button.toolTip = "\(choice.style.name), \(AnnotationColors.names[choice.color])"
+            button.setAccessibilityLabel(button.toolTip)
+            recent.addArrangedSubview(button)
+        }
+        if history.count < 8 {
+            // Keep each icon the same width as the style row above.
+            for _ in history.count..<8 { recent.addArrangedSubview(NSView()) }
+        }
+
+        let stack = NSStackView(views: history.isEmpty ? [scroll, colors, styles] : [scroll, colors, styles, recent])
         stack.orientation = .vertical
         stack.alignment = .leading
         stack.spacing = 8
@@ -137,22 +162,45 @@ final class NoteEditorViewController: NSViewController {
             colors.widthAnchor.constraint(equalTo: stack.widthAnchor),
             colors.heightAnchor.constraint(equalToConstant: 24)
         ])
+        if !history.isEmpty {
+            NSLayoutConstraint.activate([
+                recent.widthAnchor.constraint(equalTo: stack.widthAnchor),
+                recent.heightAnchor.constraint(equalToConstant: 28)
+            ])
+        }
         refreshButtons()
     }
 
     func save() -> Bool {
         note.text = text.string
+        // An annotation with no text is kept once the user has picked a look for it.
+        let blank = note.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        if note.style == .delete || (!isExisting && !touched && blank) { return onRemove?(note) ?? true }
         return onSave(note)
     }
 
     @objc private func selectStyle(_ sender: NSButton) {
-        note.style = AnnotationStyle.allCases[sender.tag]
-        colors.isHidden = false
+        let style = AnnotationStyle.allCases[sender.tag]
+        if style == .delete {
+            note.style = .delete
+            _ = save()
+            return
+        }
+        touched = true
+        note.style = style
         refreshButtons()
-        onResize?(190)
+        onAnnotationChange(note)
+    }
+    @objc private func selectRecent(_ sender: NSButton) {
+        guard history.indices.contains(sender.tag) else { return }
+        touched = true
+        note.style = history[sender.tag].style
+        note.color = history[sender.tag].color
+        refreshButtons()
         onAnnotationChange(note)
     }
     @objc private func selectColor(_ sender: NSButton) {
+        touched = true
         note.color = sender.tag
         refreshButtons()
         onAnnotationChange(note)

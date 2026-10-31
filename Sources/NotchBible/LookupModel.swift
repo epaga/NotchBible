@@ -205,13 +205,29 @@ final class LookupModel: ObservableObject {
         notes = noteStore.notes
         if result.isSearch { updateLookup() }
     }
+    func removeNote(_ note: VerseNote) throws {
+        try noteStore.remove(note)
+        guard notes != noteStore.notes else { return }
+        notes = noteStore.notes
+        if result.isSearch { updateLookup() }
+    }
+    var annotationHistory: [AnnotationChoice] {
+        (preferences.array(forKey: "noteAnnotationHistory") as? [String] ?? []).compactMap(AnnotationChoice.init)
+    }
+    func recordAnnotationChoice(_ note: VerseNote) {
+        guard note.style != .delete else { return }
+        let choice = AnnotationChoice(style: note.style, color: note.color)
+        let updated = ([choice] + annotationHistory.filter { $0 != choice }).prefix(8)
+        preferences.set(updated.map(\.stored), forKey: "noteAnnotationHistory")
+    }
     func makeNote(translation: String, segments: [NoteSegment]) -> VerseNote {
-        let style = preferences.string(forKey: "noteAnnotationStyle").flatMap(AnnotationStyle.init(rawValue:)) ?? .underline
+        let style = preferences.string(forKey: "noteAnnotationStyle").flatMap(AnnotationStyle.init(rawValue:)).flatMap { $0 == .delete ? nil : $0 } ?? .underline
         let color = preferences.integer(forKey: "noteAnnotationColor")
         return VerseNote(translation: translation, segments: segments, style: style,
                          color: AnnotationColors.values.indices.contains(color) ? color : 0)
     }
     func rememberAnnotation(_ note: VerseNote) {
+        guard note.style != .delete else { return }
         preferences.set(note.style.rawValue, forKey: "noteAnnotationStyle")
         preferences.set(note.color, forKey: "noteAnnotationColor")
     }

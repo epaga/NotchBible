@@ -100,6 +100,52 @@ final class VerseNoteTests: XCTestCase {
         XCTAssertEqual(saved?.color, blue)
     }
 
+    @MainActor
+    func testEmptyTextAnnotationIsKeptXRemovesItAndHistoryKeepsEightNewestFirst() throws {
+        let directory = try directory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        try "GEN 1:1 God created.\n".write(to: directory.appendingPathComponent("TestBible.txt"), atomically: true, encoding: .utf8)
+        let library = try BibleLibrary(directory: directory)
+        let suite = "VerseNoteTests.\(UUID().uuidString)"
+        let preferences = UserDefaults(suiteName: suite)!
+        defer { preferences.removePersistentDomain(forName: suite) }
+        let store = NoteStore(url: directory.appendingPathComponent("Notes.json"))
+        let model = LookupModel(library: library, preferences: preferences, noteStore: store)
+        let verse = NoteVerse(model.bible.verses[0].address)
+        let segment = NoteSegment(verse: verse, location: 0, length: 3, quote: "God")
+        var saved: [VerseNote] = []
+        var removed: [VerseNote] = []
+        func buttons(in view: NSView) -> [NSButton] {
+            (view as? NSButton).map { [$0] } ?? view.subviews.flatMap { buttons(in: $0) }
+        }
+        func editor(isExisting: Bool) -> NoteEditorViewController {
+            NoteEditorViewController(note: VerseNote(translation: "Test", segments: [segment]), isExisting: isExisting,
+                                     onAnnotationChange: { _ in }, onRemove: { removed.append($0); return true }) {
+                saved.append($0); return true
+            }
+        }
+        let untouched = editor(isExisting: false)
+        _ = untouched.view
+        XCTAssertTrue(untouched.save())
+        XCTAssertEqual(saved.count, 0)
+        XCTAssertEqual(removed.count, 1)
+        let picked = editor(isExisting: false)
+        try XCTUnwrap(buttons(in: picked.view).first { $0.toolTip == AnnotationStyle.box.name }).performClick(nil)
+        XCTAssertTrue(picked.save())
+        XCTAssertEqual(saved.last?.text, "")
+        try model.saveNote(try XCTUnwrap(saved.last))
+        XCTAssertEqual(NoteStore(url: store.url).notes.count, 1)
+        let deleting = editor(isExisting: true)
+        try XCTUnwrap(buttons(in: deleting.view).first { $0.toolTip == AnnotationStyle.delete.name }).performClick(nil)
+        XCTAssertEqual(removed.count, 2)
+        for color in 0..<10 {
+            var note = VerseNote(translation: "Test", segments: [segment])
+            note.color = color
+            model.recordAnnotationChoice(note)
+        }
+        XCTAssertEqual(model.annotationHistory.map(\.color), [9, 8, 7, 6, 5, 4, 3, 2])
+    }
+
     func testMultilineNotesPersistByTranslationAndEditingReplacesTheSameNote() throws {
         let directory = try directory()
         defer { try? FileManager.default.removeItem(at: directory) }
@@ -132,53 +178,18 @@ final class VerseNoteTests: XCTestCase {
         XCTAssertTrue(store.notes.isEmpty)
     }
 
-    func testLoadingLegacyEmptyNotesFiltersThemAndTheNextSaveRemovesThemFromDisk() throws {
-        let directory = try directory()
-        defer { try? FileManager.default.removeItem(at: directory) }
-        let url = directory.appendingPathComponent("Notes.json")
-        var kept = VerseNote(translation: "NET", segments: [], text: "Keep this note")
-        let empty = ["", " \t\r\n", "\u{00a0}\u{2003}\n"].map {
-            VerseNote(translation: "NET", segments: [], text: $0)
-        }
-        let original = try JSONEncoder().encode(empty + [kept])
-        try original.write(to: url)
-        let store = NoteStore(url: url)
-        XCTAssertEqual(store.notes, [kept])
-        XCTAssertEqual(try Data(contentsOf: url), original, "Loading alone must not rewrite the notes file")
-        kept.text += "\nUpdated"
-        try store.save(kept)
-        let saved = try JSONDecoder().decode([VerseNote].self, from: Data(contentsOf: url))
-        XCTAssertEqual(saved, [kept])
-        XCTAssertEqual(NoteStore(url: url).notes, [kept])
-    }
-
-    func testSavingEmptyOrWhitespaceTextRemovesOnlyThatNoteAndPersistsRemoval() throws {
-        let directory = try directory()
-        defer { try? FileManager.default.removeItem(at: directory) }
-        let bible = try BibleStore(text: "GEN 1:1 God created.\n", requiresCompleteBible: false)
-        let segment = NoteSegment(verse: NoteVerse(bible.verses[0].address), location: 0, length: 3, quote: "God")
-        for (index, empty) in ["", " \t\r\n", "\u{00a0}\u{2003}\n"].enumerated() {
-            let url = directory.appendingPathComponent("Notes-\(index).json")
-            let store = NoteStore(url: url)
-            var note = VerseNote(translation: "NET", segments: [segment], text: "Remove this note")
-            let other = VerseNote(translation: "Other", segments: [segment], text: "Keep this note")
-            try store.save(note)
-            try store.save(other)
-            note.text = empty
-            try store.save(note)
-            XCTAssertEqual(store.notes, [other])
-            XCTAssertEqual(NoteStore(url: url).notes, [other])
-        }
-    }
-
-    func testDismissingAnEmptyNewNoteDoesNotCreateAFile() throws {
+    func testEmptyTextNotesAreStoredReloadedAndRemovedExplicitly() throws {
         let directory = try directory()
         defer { try? FileManager.default.removeItem(at: directory) }
         let url = directory.appendingPathComponent("Notes.json")
         let store = NoteStore(url: url)
-        try store.save(VerseNote(translation: "NET", segments: [], text: " \t\n"))
-        XCTAssertTrue(store.notes.isEmpty)
-        XCTAssertFalse(FileManager.default.fileExists(atPath: url.path))
+        let annotation = VerseNote(translation: "NET", segments: [], text: "", style: .oval, color: 3)
+        let other = VerseNote(translation: "NET", segments: [], text: "Other")
+        try store.save(annotation)
+        try store.save(other)
+        XCTAssertEqual(NoteStore(url: url).notes, [annotation, other])
+        try store.remove(annotation)
+        XCTAssertEqual(NoteStore(url: url).notes, [other])
     }
 
     func testSelectionsAcrossVersesExcludeLabelsAndUseUTF16Offsets() throws {
@@ -240,8 +251,7 @@ final class VerseNoteTests: XCTestCase {
             model.setVisibleVerses([verses[0]])
             XCTAssertEqual(model.noteCount(for: "Alpha"), 1)
             XCTAssertEqual(model.noteCount(for: "Beta"), 0)
-            alphaNote.text = " \t\n"
-            try model.saveNote(alphaNote)
+            try model.removeNote(alphaNote)
             XCTAssertEqual(model.noteCount(for: "Alpha"), 0)
             XCTAssertFalse(model.notes.contains { $0.id == alphaNote.id })
         }

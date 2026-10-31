@@ -118,12 +118,14 @@ to open it. **‹** and **›** step through the history without reordering it.
 Select text in a verse and release the mouse to open a note below your selection.
 Type freely, including line breaks. Under the text area, choose underline,
 dotted underline, box, oval, background highlight, or the bottom or
-top half of a box. Clicking a style reveals ten color choices. Click elsewhere
+top half of a box. The ten color choices sit above the styles, and below them
+your last eight style and color combinations can be picked again with one click.
+Click elsewhere
 or press **Command–Return** to save and close the note.
 Style and color changes appear immediately in the verse. New notes use your last
 chosen style and color, starting with a yellow underline before your first choice.
-To remove a note and its annotation, clear its text and save. Text containing
-only spaces or line breaks also counts as empty.
+A note may have no text; the annotation is still kept once you choose a style or
+color. To remove a note and its annotation, click the **X** at the end of the style row.
 
 Annotations follow the selected text across wrapped lines and verses. Click an
 annotation to reopen its note. Notes belong to the translation selected when

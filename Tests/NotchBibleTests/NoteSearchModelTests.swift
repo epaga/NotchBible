@@ -40,8 +40,7 @@ final class NoteSearchModelTests: XCTestCase {
         model.setVisibleVerses([])
         XCTAssertEqual(model.noteCount(for: "Alpha"), 2)
         XCTAssertEqual(model.noteCount(for: "Beta"), 1)
-        beta.text = ""
-        try model.saveNote(beta)
+        try model.removeNote(beta)
         XCTAssertEqual(model.noteCount(for: "Beta"), 0)
         model.query = "gen1:1"
         XCTAssertFalse(model.isAllNotesSearch)
@@ -89,8 +88,7 @@ final class NoteSearchModelTests: XCTestCase {
         XCTAssertTrue(model.result.passages.isEmpty, "Editing a matching note must refresh the current search")
         model.query = "note:changed"
         XCTAssertEqual(model.result.passages.map(\.range.lowerBound), [0, 1])
-        alpha.text = ""
-        try model.saveNote(alpha)
+        try model.removeNote(alpha)
         XCTAssertTrue(model.result.passages.isEmpty, "Deleting a note must remove its search matches")
         XCTAssertEqual(NoteStore(url: store.url).notes, [beta])
         let nextLaunch = LookupModel(library: library, preferences: preferences, noteStore: NoteStore(url: store.url))
